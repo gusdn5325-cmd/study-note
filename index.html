@@ -436,7 +436,8 @@ async function openCard(id){
   curTopic=topicById(id);
   cardviews[id]=Date.now(); await sSet('wr2-cardviews',cardviews);
   let html='<b class="serif" style="font-size:1.12rem">'+esc(c.name)+'</b>'+
-    '<p style="font-size:.8rem;color:var(--sub);margin:3px 0 4px">'+esc(c.one)+'</p>';
+    '<p style="font-size:.8rem;color:var(--sub);margin:3px 0 6px">'+esc(c.one)+'</p>'+
+    '<button class="btn teal sm" id="mmbtn" onclick="toggleMindmap(\''+id+'\')">🗺 마인드맵 펼치기</button><div id="mmbox"></div>';
   html+='<div class="skel">'+c.skel.map((s,i)=>'<div class="sk'+(i===0?' open':'')+'" ><b onclick="this.parentNode.classList.toggle(\'open\')">'+esc(s.h)+'</b><div>'+esc(s.b)+'</div></div>').join('')+'</div>';
   if(c.nums&&c.nums.length){
     html+='<table class="numtable">'+c.nums.map(n=>'<tr><td>'+esc(n[0])+'</td><td>'+esc(n[1])+'</td></tr>').join('')+'</table>';
@@ -484,6 +485,72 @@ async function setState(i){
   if(!curTopic)return;
   progress[curTopic.id]=i; await sSet('wr2-progress',progress);
   openTopic(curTopic.id); toast('저장: '+STATES[i]); renderHome();
+}
+
+/* ---------- 토픽 마인드맵 (카드 구조 → 방사형 개념도) ---------- */
+const MMCOL=['#0C5D79','#137F74','#C77B2C','#B5342A','#5B6EA8','#8A6D1A','#4E7A3A','#7A5AA0'];
+function mmWrap(s,n){ // n자 단위 줄바꿈
+  s=String(s); const out=[];
+  for(let i=0;i<s.length&&out.length<3;i+=n) out.push(s.slice(i,i+n));
+  if(s.length>n*3) out[2]=out[2].slice(0,n-1)+'…';
+  return out;
+}
+function mmText(x,y,lines,size,fill,anchor,bold){
+  const lh=size*1.25;
+  const y0=y-(lines.length-1)*lh/2;
+  return '<text x="'+x+'" y="'+y0+'" font-size="'+size+'" fill="'+fill+'" text-anchor="'+(anchor||'middle')+'"'+(bold?' font-weight="700"':'')+' font-family="inherit">'+
+    lines.map((l,i)=>'<tspan x="'+x+'" dy="'+(i?lh:0)+'">'+esc(l)+'</tspan>').join('')+'</text>';
+}
+function mindmapSVG(card){
+  const W=740,H=600,cx=W/2,cy=H/2;
+  // 가지: 뼈대 섹션 + 핵심수치 + 기억법
+  const branches=card.skel.map(s=>({t:s.h.replace(/^[①-⑩⑴-⒑\d\.\s]+/,'').trim(),leaves:[]}));
+  if(card.nums&&card.nums.length) branches.push({t:'핵심 수치',leaves:card.nums.slice(0,4).map(n=>n[0]+' · '+n[1])});
+  branches.push({t:'기억법 🧠',leaves:[card.mn.split('/')[0].trim()]});
+  const N=branches.length;
+  let svg='<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">';
+  svg+='<rect width="'+W+'" height="'+H+'" fill="#FBFCFA" rx="14"/>';
+  const r1=170; // 가지 반경
+  branches.forEach((b,i)=>{
+    const ang=(-90+ i*(360/N))*Math.PI/180;
+    const bx=cx+r1*Math.cos(ang), by=cy+r1*Math.sin(ang)*0.82;
+    const col=MMCOL[i%MMCOL.length];
+    // 곡선 연결
+    const mx=cx+(r1*0.5)*Math.cos(ang), my=cy+(r1*0.5)*Math.sin(ang)*0.6;
+    svg+='<path d="M'+cx+','+cy+' Q'+mx+','+my+' '+bx+','+by+'" stroke="'+col+'" stroke-width="3.5" fill="none" stroke-linecap="round" opacity=".85"/>';
+    // 가지 노드
+    const bl=mmWrap(b.t,9);
+    const bw=Math.max(...bl.map(l=>l.length))*13+26, bh=bl.length*19+14;
+    svg+='<rect x="'+(bx-bw/2)+'" y="'+(by-bh/2)+'" width="'+bw+'" height="'+bh+'" rx="'+(bh/2)+'" fill="'+col+'"/>';
+    svg+=mmText(bx,by+4.5,bl,13.5,'#fff','middle',true);
+    // 잎 노드
+    const L=b.leaves.length;
+    b.leaves.forEach((lf,j)=>{
+      const spread=Math.min(38,L>1?76/(L-1):0);
+      const la=ang+((j-(L-1)/2)*spread)*Math.PI/180;
+      const r2=r1+95+(Math.abs(Math.sin(la))*38);
+      const lx=cx+r2*Math.cos(la), ly=cy+r2*Math.sin(la)*0.82;
+      svg+='<line x1="'+bx+'" y1="'+by+'" x2="'+lx+'" y2="'+ly+'" stroke="'+col+'" stroke-width="1.6" opacity=".5"/>';
+      const ll=mmWrap(lf,12);
+      const lw=Math.max(...ll.map(l=>l.length))*11+18, lh2=ll.length*16+10;
+      svg+='<rect x="'+(lx-lw/2)+'" y="'+(ly-lh2/2)+'" width="'+lw+'" height="'+lh2+'" rx="8" fill="#fff" stroke="'+col+'" stroke-width="1.5"/>';
+      svg+=mmText(lx,ly+4,ll,11.5,'#2A3A42');
+    });
+  });
+  // 중심 노드
+  const cl=mmWrap(card.name,8);
+  const cw=Math.max(...cl.map(l=>l.length))*17+34, ch=cl.length*24+22;
+  svg+='<rect x="'+(cx-cw/2)+'" y="'+(cy-ch/2)+'" width="'+cw+'" height="'+ch+'" rx="16" fill="#17262E"/>';
+  svg+=mmText(cx,cy+6,cl,17,'#F2C14E','middle',true);
+  svg+='</svg>';
+  return svg;
+}
+function toggleMindmap(id){
+  const box=$('mmbox');
+  if(box.innerHTML){box.innerHTML='';$('mmbtn').textContent='🗺 마인드맵 펼치기';return;}
+  const c=cardByTopic(id); if(!c)return;
+  box.innerHTML='<div style="border:1.5px solid #E0E5DF;border-radius:13px;overflow:hidden;margin:10px 0">'+mindmapSVG(c)+'</div><p style="font-size:.7rem;color:var(--sub);text-align:center;margin-top:-4px">중심(주제) → 가지(답안 뼈대) → 잎(수치·암기) 순서로 눈에 새기세요</p>';
+  $('mmbtn').textContent='🗺 마인드맵 접기';
 }
 
 /* ---------- 이슈 ---------- */
