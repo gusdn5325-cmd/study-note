@@ -169,6 +169,9 @@ nav button.on{color:var(--water)}
 .toast.show{opacity:1}
 .mabtn{font-size:.72rem;padding:5px 11px;border-radius:9px;border:1.5px solid var(--teal);background:#fff;color:var(--teal);font-weight:700;cursor:pointer;font-family:inherit}
 .mabtn:disabled{opacity:.5}
+.matools{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.matools button{font-size:.72rem;padding:7px 11px;border-radius:9px;border:1.5px solid #D6DDD6;background:#fff;color:var(--sub);font-weight:600;cursor:pointer;font-family:inherit}
+.matools button:active{background:#F0F4F0}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -198,7 +201,7 @@ nav button.on{color:var(--water)}
       <div class="bar"><i id="sprog" style="width:0%"></i></div>
     </div>
   </div>
-  <p style="text-align:center;font-size:.7rem;color:var(--sub);margin:-4px 0 10px">합격노트 <b id="verbadge">v9</b> · 마인드맵 탑재</p>
+  <p style="text-align:center;font-size:.7rem;color:var(--sub);margin:-4px 0 10px">합격노트 <b id="verbadge">v10</b> · 마인드맵 탑재</p>
   <div class="row2">
     <button class="btn" onclick="go('solve')">✍️ 답안 연습</button>
     <button class="btn teal" onclick="go('study')">📖 모범답안 카드</button>
@@ -242,7 +245,7 @@ nav button.on{color:var(--water)}
       </select>
       <button class="btn sm" style="max-width:120px" id="bulkbtn" onclick="bulkGen()">일괄 생성</button>
     </div>
-    <div id="bulkstat" style="font-size:.76rem;color:var(--sub)">해당 티어 전 기출의 모범답안(모식도 포함)을 순차 생성해 기기에 저장해요. 티어당 수십 분·API 사용량이 들 수 있어 Wi-Fi에서 켜두는 걸 권장. 생성분은 각 문제의 "모범답안 보기"에서 즉시 열려요.</div>
+    <div id="bulkstat" style="font-size:.76rem;color:var(--sub)">해당 티어 전 기출의 모범답안(모식도 포함)을 순차 생성해 기기에 저장해요. 이미 만든 답안은 건너뛰므로 기존 답안·수정본은 그대로 보존됩니다. 티어당 수십 분·API 사용량이 들 수 있어 Wi-Fi에서 켜두는 걸 권장. 생성분은 각 문제의 "모범답안 보기"에서 즉시 열려요.</div>
     <div class="bar" id="bulkbar" style="display:none"><i id="bulkfill" style="width:0%"></i></div>
   </div>
   <div id="solvearea" style="display:none">
@@ -322,7 +325,7 @@ nav button.on{color:var(--water)}
   </div>
   <div class="card">
     <h2>앱 업데이트</h2>
-    <p style="font-size:.76rem;color:var(--sub);margin-bottom:8px">현재 버전 <b>v9</b>. 새 파일을 올렸는데 화면이 그대로면 아래를 누르세요 — 캐시를 비우고 최신본을 다시 받아옵니다.</p>
+    <p style="font-size:.76rem;color:var(--sub);margin-bottom:8px">현재 버전 <b>v10</b>. 새 파일을 올렸는데 화면이 그대로면 아래를 누르세요 — 캐시를 비우고 최신본을 다시 받아옵니다.</p>
     <button class="btn sm" onclick="forceUpdate()">🔄 최신 버전 받기</button>
   </div>
   <div class="card">
@@ -868,6 +871,100 @@ function scScore(){
   saveAttempt(sc);
 }
 
+/* ---------- 모범답안 보완·편집 ---------- */
+let modelHist={};   // {key:[이전버전,...]}  최대 3단계
+let modelMeta={};   // {key:{edited:true,ts:...}}
+async function pushHist(key,old){
+  if(!old)return;
+  modelHist[key]=[old].concat(modelHist[key]||[]).slice(0,3);
+  const ks=Object.keys(modelHist);
+  if(ks.length>60)delete modelHist[ks[0]];
+  await sSet('wr2-mahist',modelHist);
+}
+function maBadge(key){
+  const m=modelMeta[key];
+  if(!m)return '';
+  return '<span style="font-size:.66rem;background:#DFF0E6;color:var(--ok);border-radius:99px;padding:2px 8px;margin-left:6px">'+(m.edited?'직접 수정':'보완 '+(m.rev||1)+'회')+'</span>';
+}
+function maHTML(key,tid,title){
+  const txt=modelCache[key]||'';
+  const hist=(modelHist[key]||[]).length;
+  return '<div class="feedback" style="margin-top:8px"><h3>'+esc(title||'모범답안')+maBadge(key)+'</h3>'+esc(txt)+'</div>'+
+   '<div class="matools">'+
+    '<button onclick="refineMA(\''+key+'\',\''+tid+'\',\'detail\')">🔎 더 상세히</button>'+
+    '<button onclick="refineMA(\''+key+'\',\''+tid+'\',\'nums\')">📐 수치·근거 보강</button>'+
+    '<button onclick="refineMA(\''+key+'\',\''+tid+'\',\'short\')">✂️ 답안지 분량 압축</button>'+
+    '<button onclick="askRefineMA(\''+key+'\',\''+tid+'\')">💬 직접 지시</button>'+
+    '<button onclick="editMA(\''+key+'\',\''+tid+'\')">✏️ 내가 편집</button>'+
+    (hist?'<button onclick="undoMA(\''+key+'\',\''+tid+'\')">↩️ 되돌리기('+hist+')</button>':'')+
+   '</div>';
+}
+function maBox(key){ return $('ma-'+key) || $('fbarea'); }
+function maRender(key,tid,title){ const b=maBox(key); if(b) b.innerHTML=maHTML(key,tid,title); }
+const REFINE={
+ detail:'각 항목을 더 깊이 있게 확장하세요. 본론 항목마다 근거·절차·수치·실무 착안점을 추가하고, 서술형이면 답안지 3페이지 분량까지 늘리세요. 기존 내용 중 옳은 부분은 유지하세요.',
+ nums:'수치·기준·법조항 근거를 최대한 보강하세요. 각 기준값에 출처(기준명·조항·표 번호)를 병기하고, 불확실한 값은 단정하지 말고 "기준 확인 필요"로 표기하세요. 구조는 유지하세요.',
+ short:'실제 시험 답안지 분량(1교시 1페이지/서술형 2페이지)에 맞게 압축하세요. 핵심 키워드·수치는 반드시 남기고 서술을 간결하게 다듬으세요.'
+};
+async function refineMA(key,tid,mode,custom){
+  if((settings.ai||'auto')==='off'){toast('AI 설정을 켜야 보완할 수 있어요 (기록 탭)');return;}
+  const cur=modelCache[key]; if(!cur){toast('먼저 모범답안을 생성해 주세요');return;}
+  const b=maBox(key); if(!b)return;
+  b.innerHTML='<div class="feedback" style="margin-top:8px"><h3>보완 중</h3><span class="spin" style="border-color:var(--water);border-top-color:transparent"></span> 채점위원이 답안을 다듬는 중입니다...</div>';
+  const t=topicById(tid), q=t?t.qs.find(x=>x.h+'-'+x.g+'-'+x.n===key):null;
+  const card=cardByTopic(tid);
+  const rubric=card?'\n\n[검증된 답안 뼈대 — 이 내용·수치와 어긋나지 않게]\n'+card.skel.map(s=>s.h+': '+s.b).join('\n')+'\n핵심 수치: '+(card.nums||[]).map(n=>n[0]+'='+n[1]).join(', ')+'\n근거: '+card.src:'';
+  const inst=custom||REFINE[mode]||REFINE.detail;
+  const prompt='당신은 수자원개발기술사 수석 채점위원입니다. 아래 기존 모범답안을 보완하세요.\n\n[문제]\n'+(q?q.q:'(문제 원문 없음)')+rubric+
+    '\n\n[기존 답안]\n'+cur+'\n\n[보완 지시]\n'+inst+
+    '\n\n[규칙]\n- 국내 설계기준(KDS, 하천설계기준, 하천설계실무요령 2024, 홍수량 산정 표준지침, 소하천설계기준, 자연재해대책법·하천법) 기준.\n- 본론 중 한 곳에 【모식도】 절을 텍스트 그림으로 유지·개선.\n- 마지막 줄에 "※ 근거: (기준·조항)" 명시.\n- 설명·인사말 없이 보완된 답안 전문만 출력.';
+  try{
+    const txt=await callAI([{type:'text',text:prompt}],2200);
+    await pushHist(key,cur);
+    await saveModelCache(key,txt);
+    modelMeta[key]={rev:((modelMeta[key]||{}).rev||0)+1}; await sSet('wr2-mameta',modelMeta);
+    maRender(key,tid,'모범답안 (보완됨)');
+    toast('보완 완료 — 이전 버전은 되돌리기로 복구 가능');
+  }catch(e){
+    b.innerHTML=maHTML(key,tid,'모범답안')+'<div class="feedback" style="margin-top:6px"><h3>보완 실패</h3>'+esc(String(e.message||e))+'</div>';
+  }
+}
+function askRefineMA(key,tid){
+  const b=maBox(key); if(!b)return;
+  b.innerHTML='<div class="feedback" style="margin-top:8px"><h3>보완 지시 입력</h3>'+
+    '<textarea id="ri-'+key+'" style="width:100%;min-height:80px;border:1.5px solid var(--rule);border-radius:10px;padding:9px;font-family:inherit;font-size:.85rem;margin-top:6px" placeholder="예) 하천기본계획과의 연계를 추가하고, 투자우선순위 평가항목을 표로 정리해줘"></textarea>'+
+    '<div class="matools"><button onclick="doAskRefine(\''+key+'\',\''+tid+'\')">보완 실행</button><button onclick="maRender(\''+key+'\',\''+tid+'\')">취소</button></div></div>';
+  const el=$('ri-'+key); if(el)el.focus();
+}
+function doAskRefine(key,tid){
+  const el=$('ri-'+key); const v=el?el.value.trim():'';
+  if(!v){toast('보완할 내용을 적어주세요');return;}
+  refineMA(key,tid,'custom',v+'\n(기존 답안의 옳은 부분은 유지하고 지시 사항을 반영해 전문을 다시 작성)');
+}
+function editMA(key,tid){
+  const b=maBox(key); if(!b)return;
+  b.innerHTML='<div class="feedback" style="margin-top:8px"><h3>직접 편집</h3>'+
+    '<textarea id="ed-'+key+'" style="width:100%;min-height:280px;border:1.5px solid var(--rule);border-radius:10px;padding:10px;font-family:inherit;font-size:.85rem;line-height:1.6;margin-top:6px"></textarea>'+
+    '<div class="matools"><button onclick="saveEditMA(\''+key+'\',\''+tid+'\')">💾 저장</button><button onclick="maRender(\''+key+'\',\''+tid+'\')">취소</button></div></div>';
+  const el=$('ed-'+key); if(el)el.value=modelCache[key]||'';
+}
+async function saveEditMA(key,tid){
+  const el=$('ed-'+key); if(!el)return;
+  const v=el.value.trim(); if(!v){toast('내용이 비어 있어요');return;}
+  await pushHist(key,modelCache[key]);
+  await saveModelCache(key,v);
+  modelMeta[key]={edited:true}; await sSet('wr2-mameta',modelMeta);
+  maRender(key,tid,'모범답안'); toast('저장 완료 (직접 수정본)');
+}
+async function undoMA(key,tid){
+  const h=modelHist[key]||[]; if(!h.length){toast('되돌릴 이전 버전이 없어요');return;}
+  const prev=h.shift();
+  modelHist[key]=h; await sSet('wr2-mahist',modelHist);
+  await saveModelCache(key,prev);
+  const m=modelMeta[key]; if(m){ if(m.edited)delete modelMeta[key]; else if(m.rev>1)m.rev--; else delete modelMeta[key]; await sSet('wr2-mameta',modelMeta); }
+  maRender(key,tid,'모범답안 (이전 버전)'); toast('이전 버전으로 복구했어요');
+}
+
 /* ---------- 문제별 모범답안 (AI 생성 + 캐시) ---------- */
 let modelCache={};
 async function genAnswerCore(qtext,gyo,tid){
@@ -904,7 +1001,7 @@ async function genModelAns(tid,h,g,n){
   const box=$('ma-'+key),btn=$('mab-'+key);
   if(!box)return;
   if(modelCache[key]){
-    box.innerHTML=box.innerHTML?'':'<div class="feedback" style="margin-top:8px"><h3>모범답안</h3>'+esc(modelCache[key])+'</div>';
+    box.innerHTML=box.innerHTML?'':maHTML(key,tid);
     if(btn)btn.textContent=box.innerHTML?'접기':'📄 모범답안 보기 (저장됨)';
     return;
   }
@@ -920,7 +1017,7 @@ async function genModelAns(tid,h,g,n){
   try{
     const text=await genAnswerCore(q.q,g,tid);
     await saveModelCache(key,text);
-    box.innerHTML='<div class="feedback" style="margin-top:8px"><h3>모범답안</h3>'+esc(text)+'</div>';
+    box.innerHTML=maHTML(key,tid);
     if(btn){btn.disabled=false;btn.textContent='접기';}
   }catch(e){
     const alt=offlineAnswer(tid);
@@ -934,7 +1031,7 @@ async function genModelAnsSolve(){
   const key=curQ.h+'-'+curQ.g+'-'+curQ.n;
   const btn=$('masolvebtn');
   if(modelCache[key]){
-    $('fbarea').innerHTML='<div class="feedback"><h3>모범답안</h3>'+esc(modelCache[key])+'</div>';
+    $('fbarea').innerHTML=maHTML(key,curQ.tid);
     $('fbarea').scrollIntoView({behavior:'smooth'});return;
   }
   if((settings.ai||'auto')==='off'){
@@ -947,7 +1044,7 @@ async function genModelAnsSolve(){
   try{
     const text=await genAnswerCore(curQ.q,curQ.g,curQ.tid);
     await saveModelCache(key,text);
-    $('fbarea').innerHTML='<div class="feedback"><h3>모범답안</h3>'+esc(text)+'</div>';
+    $('fbarea').innerHTML=maHTML(key,curQ.tid);
     $('fbarea').scrollIntoView({behavior:'smooth'});
   }catch(e){
     const alt=offlineAnswer(curQ.tid);
@@ -1026,6 +1123,8 @@ async function resetAll(){
   attempts=(await sGet('wr2-attempts'))||[];
   cardviews=(await sGet('wr2-cardviews'))||{};
   await loadModelCache();
+  modelHist=(await sGet('wr2-mahist'))||{};
+  modelMeta=(await sGet('wr2-mameta'))||{};
   const sv=await sGet('wr2-settings'); if(sv&&sv.examDate)settings=Object.assign({ai:'auto',key:''},sv);
   if($('gradebtn'))$('gradebtn').textContent=gradeLabel();
   fillSelects();renderHome();renderIssues();
