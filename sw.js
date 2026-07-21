@@ -1,11 +1,11 @@
-const CACHE='hn-v17';
-const ASSETS=['./','./index.html','./manifest.webmanifest'];
+const CACHE='hn-c07f6a5a64';
+const ASSETS=['./','./index.html','./data.json','./manifest.webmanifest'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS).catch(()=>{})));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
 self.addEventListener('fetch',e=>{
   const req=e.request, u=new URL(req.url);
   if(req.method!=='GET'||u.origin!==location.origin) return;
-  const isDoc = req.mode==='navigate' || u.pathname.endsWith('.html') || u.pathname.endsWith('/');
+  const isDoc = req.mode==='navigate' || u.pathname.endsWith('.html') || u.pathname.endsWith('/') || u.pathname.endsWith('.json');
   if(isDoc){
     e.respondWith(fetch(req).then(res=>{
       const cp=res.clone(); caches.open(CACHE).then(c=>c.put(req,cp).catch(()=>{})); return res;
