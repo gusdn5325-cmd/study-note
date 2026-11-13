@@ -22,7 +22,12 @@ const fmt = iso => new Date(iso).toLocaleDateString('ko-KR', { month: 'short', d
 function load() { try { return { cards: {}, attempts: [], drafts: {}, days: {}, ...(JSON.parse(localStorage.getItem(KEY)) || {}) }; } catch { return { cards: {}, attempts: [], drafts: {}, days: {} }; } }
 let S = load();
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { toast('브라우저 저장소를 쓸 수 없습니다. 기록 내보내기를 이용하세요'); } }
-function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); setTimeout(() => el.classList.remove('on'), 2000); }
+let toastT = null;
+function toast(t, undo) {
+  const el = $('toast'); el.innerHTML = `<span>${esc(t)}</span>${undo ? '<button type="button" id="toastUndo">되돌리기</button>' : ''}`;
+  el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), undo ? 6000 : 4000);
+  if (undo) $('toastUndo').onclick = () => { undo(); el.classList.remove('on'); };
+}
 
 // ── 오늘의 추천: 몫 채우기 + 약점 가중 ──
 // 비중 = (누적 출제 + k × 최근 6회 출제) × 약점계수, k는 평소 2·시험 4주 전부터 4
@@ -83,10 +88,10 @@ function renderToday() {
   const due = ANS.filter(x => isDue(x.id)).length, seen = ANS.filter(a => S.cards[a.id]).length;
   const names = { read: '서브노트 읽기', recall: '가리고 떠올리기', write: '시간 재고 쓰기', compare: '모범답안과 비교', review: '복습 예약' };
   $('v-today').innerHTML = `
-    <h1>오늘 할 일</h1><p class="sub">${esc(SN.topic)} · ${esc(SN.count)} · 공부한 문항 ${seen}/${ANS.length} · 오늘 복습 ${due}건</p>
-    ${isAuto() ? (() => { const p = autoTopic(), f = D.topics[TI].freq || {}, dd = daysToExam();
-      const head = dd !== null ? `시험까지 D-${dd}${recentK() === 4 ? ' (막판 4주: 최근 출제 비중 강화)' : ''}. ` : '';
-      return `<p class="note">${head}${p.why === 'due' ? `복습할 문항이 ${p.n}건 쌓여 있어 이 주제를 먼저 골랐습니다.` : `오늘의 추천: 이 주제의 목표 비중은 ${Math.round(p.share * 100)}%(누적 ${f.tot}회·최근 6회 ${f.rec}회${p.weak > 1.05 ? '·약점 가중' : p.weak < 0.95 ? '·잘 아는 주제라 감량' : ''})인데, 지금까지 ${p.done}일 공부해 목표(${p.target.toFixed(1)}일)보다 가장 덜 했습니다.`}</p>`; })() : ''}
+    <h1>오늘 할 일</h1><p class="sub">${esc(SN.topic)}${daysToExam() !== null ? ` · 시험까지 D-${daysToExam()}` : ''}${due ? ` · 복습 ${due}건` : ''}</p>
+    ${isAuto() ? (() => { const p = autoTopic(), f = D.topics[TI].freq || {};
+      const why = p.why === 'due' ? `복습할 문항이 ${p.n}건 쌓여 있어 이 주제를 먼저 골랐습니다.` : `이 주제는 출제 비중 ${Math.round(p.share * 100)}%(누적 ${f.tot}회, 최근 6회 ${f.rec}회)입니다. 지금까지 ${p.done}일 공부해 비중 대비 가장 덜 한 주제라서 골랐습니다.${p.weak > 1.05 ? ' 복습 평가가 낮아 더 자주 나옵니다.' : p.weak < 0.95 ? ' 잘 아는 주제라 덜 나옵니다.' : ''}${recentK() === 4 ? ' 시험 4주 전이라 최근 출제를 더 무겁게 봅니다.' : ''}`;
+      return `<details class="why"><summary>왜 이 주제?</summary><p class="note">${why} 공부한 문항 ${seen}/${ANS.length}.</p></details>`; })() : `<p class="note">공부한 문항 ${seen}/${ANS.length}</p>`}
     <div class="todo">${STEPS.map((s, i) => `<div class="${t.done.includes(s) ? 'done' : ''}"><b>${i + 1}단계${t.done.includes(s) ? ' ✓' : ''}</b><span class="lbl">${names[s]}</span><span class="sh">${SHORT[s]}</span></div>`).join('')}</div>
     <div class="panel"><div class="row"><span class="badge">${a.gyosi}교시 · ${a.max}점 · ${minutes(a)}분</span>${badge(a)}${isDue(a.id) ? '<span class="badge due">복습</span>' : ''}<span class="badge">${esc(a.type)}</span></div>
       <p class="q">${esc(a.question)}</p>
@@ -107,14 +112,14 @@ function subnoteHtml(hide) {
     if (!hide) return esc(text);
     const re = new RegExp(`(${keys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}|\\d+(?:\\.\\d+)?\\s*(?:년|%|개))`, 'g');
     let out = '', last = 0;
-    for (const m of text.matchAll(re)) { out += esc(text.slice(last, m.index)) + `<button class="blank" type="button">${esc(m[0])}</button>`; last = m.index + m[0].length; }
+    for (const m of text.matchAll(re)) { out += esc(text.slice(last, m.index)) + `<button class="blank" type="button" aria-label="빈칸, 눌러서 보기"><span aria-hidden="true">${esc(m[0])}</span></button>`; last = m.index + m[0].length; }
     return out + esc(text.slice(last));
   };
-  const cell = v => hide ? `<button class="blank" type="button">${esc(v)}</button>` : esc(v);
+  const cell = v => hide ? `<button class="blank" type="button" aria-label="빈칸, 눌러서 보기"><span aria-hidden="true">${esc(v)}</span></button>` : esc(v);
   return `
     <h2>① 정의</h2><p class="def">${blankify(SN.definition)}</p>
     <h2>② 목차 (기본 뼈대)</h2><ol class="outline">${SN.outline.map(o => `<li>${blankify(o)}</li>`).join('')}</ol>
-    <h2>③ 핵심어</h2><div class="chips">${SN.keywords.map(k => hide ? `<button class="blank" type="button">${esc(k)}</button>` : `<span class="chip">${esc(k)}</span>`).join('')}</div>
+    <h2>③ 핵심어</h2><div class="chips">${SN.keywords.map(k => hide ? `<button class="blank" type="button" aria-label="빈칸, 눌러서 보기"><span aria-hidden="true">${esc(k)}</span></button>` : `<span class="chip">${esc(k)}</span>`).join('')}</div>
     <h2>④ 수치·조항</h2><table><tr><th>내용</th><th>수치</th><th>근거</th></tr>${SN.facts.map(f => `<tr><td>${esc(f.item)}</td><td>${cell(f.value)}</td><td>${cell(f.basis)}</td></tr>`).join('')}</table>
     ${SN.lists.map(l => `<h2>${esc(l.title)}</h2><ol class="outline">${l.items.map(i => `<li>${cell(i)}</li>`).join('')}</ol>`).join('')}
     <h2>⑤ 그림: 수립 절차 흐름도</h2>${hide ? '<p class="note">흐름도는 빈 종이에 직접 그려 본 뒤 아래 버튼으로 확인합니다.</p><details><summary>흐름도 보기</summary>' : ''}<pre class="fig">${esc(SN.figure)}</pre>${hide ? '</details>' : ''}
@@ -145,18 +150,17 @@ function renderWrite() {
   const a = answerOf(pickQuestion()), draft = S.drafts[a.id] || '', target = a.gyosi === 1 ? 500 : 1300;
   const pen = S.writeMode === 'pen';
   $('v-write').innerHTML = `<h1>3단계 · 시간 재고 쓰기</h1><p class="sub">모범답안을 보지 않고 씁니다. 권장 분량 ${target}자(답안지 ${a.gyosi === 1 ? '약 1.3쪽' : '3~4쪽'}).</p>
-    <div class="panel"><div class="row"><span class="badge">${a.gyosi}교시 · ${a.max}점</span><span class="badge">${esc(a.type)}</span></div><p class="q">${esc(a.question)}</p>
-      <div class="row"><span class="timer" id="timer">${minutes(a)}:00</span><button class="ghost" id="timerBtn" type="button">시작</button><span class="note">목표 ${minutes(a)}분</span>
-      ${pen ? '' : `<div class="meter"><i id="lenBar" style="width:0"></i></div><span class="note" id="lenText">0 / ${target}자</span>`}</div></div>
+    <div class="writebar"><div class="row"><span class="badge">${a.gyosi}교시 · ${a.max}점 · ${minutes(a)}분</span><span class="timer" id="timer" role="timer">${minutes(a)}:00</span><button class="ghost" id="timerBtn" type="button">시작</button>
+      ${pen ? '' : `<div class="meter" aria-hidden="true"><i id="lenBar" style="width:0"></i></div><span class="note" id="lenText">0 / ${target}자</span>`}</div><p class="q">${esc(a.question)}</p>
     <div class="modebar"><div class="seg"><button type="button" data-mode="text" class="${pen ? '' : 'on'}">글자 입력</button><button type="button" data-mode="pen" class="${pen ? 'on' : ''}">펜 손글씨</button></div>
-      <span class="note">${pen ? '실제 답안지처럼 펜으로 씁니다. 손가락으로는 화면을 넘깁니다. 4단계에서 핵심어를 직접 체크합니다.' : '아이패드에서는 이 칸에 애플펜슬로 쓰면 글자로 바뀝니다(손글씨 입력 기능 — 기기에서 한국어 지원 여부 확인).'}</span></div>
-    ${pen ? `<div class="pentools"><button class="ghost on" type="button" data-tool="pen">펜</button><button class="ghost" type="button" data-tool="eraser">지우개</button><button class="ghost" type="button" id="penUndo">되돌리기</button><button class="ghost" type="button" id="penAddPage">쪽 추가</button><button class="ghost" type="button" id="penClear">이 쪽 지우기</button><label class="note"><input type="checkbox" id="fingerDraw"> 손가락으로도 쓰기</label></div><div class="pages" id="pages"></div>`
-      : `<textarea id="answer" placeholder="Ⅰ. 개요 → Ⅱ. 본론(번호체계) → 표·모식도 → 근거 조항 → 실무 의견">${esc(draft)}</textarea>`}
+      <span class="note">${pen ? '펜으로 씁니다. 손가락은 화면 넘기기.' : '애플펜슬로 쓰면 글자로 바뀝니다.'}</span></div>
+    ${pen ? `<div class="pentools"><button class="ghost on" type="button" data-tool="pen">펜</button><button class="ghost" type="button" data-tool="eraser">지우개</button><button class="ghost" type="button" id="penUndo">되돌리기</button><button class="ghost" type="button" id="penAddPage">쪽 추가</button><button class="ghost" type="button" id="penClear">이 쪽 지우기</button><label><input type="checkbox" id="fingerDraw"> 손가락으로도 쓰기</label></div></div><div class="pages" id="pages"></div>`
+      : `</div><textarea id="answer" aria-label="답안" placeholder="Ⅰ. 개요 → Ⅱ. 본론(번호체계) → 표·모식도 → 근거 조항 → 실무 의견">${esc(draft)}</textarea>`}
     <div class="row" style="margin-top:10px"><button class="ghost" id="saveDraft" type="button">임시저장</button><button class="primary" id="submitAnswer" type="button">작성 완료 → 4단계 비교</button></div>`;
   remain = minutes(a) * 60; spent = 0; clearInterval(timer); timer = null;
   if (pen) { PEN.open(a.id, a.gyosi === 1 ? 2 : 4); return; }
   const ta = $('answer'); const upd = () => { const n = ta.value.length; $('lenText').textContent = `${n} / ${target}자`; $('lenBar').style.width = Math.min(100, n / target * 100) + '%'; };
-  ta.addEventListener('input', upd); upd();
+  let st = null; ta.addEventListener('input', () => { upd(); clearTimeout(st); st = setTimeout(() => { S.drafts[a.id] = ta.value; save(); }, 800); }); upd();
 }
 
 // ── 펜 손글씨: 획을 쪽 너비 기준 비율 좌표로 저장해 가로·세로 전환 때 다시 그린다. 저장은 IndexedDB ──
@@ -242,13 +246,13 @@ function renderCompare() {
   if (last.pen) return renderComparePen(a, last);
   const q = { card, ex: exOf(a.id) }, r = scoreAnswer(q, last.text), ks = keywords(q), an = normal(last.text);
   $('v-compare').innerHTML = `<h1>4단계 · 모범답안과 비교</h1><p class="sub">점수는 모범답안 핵심어·형식·분량으로 계산한 "빠진 것 확인용"입니다. 실제 채점과 다릅니다.</p>
-    <div class="result"><div class="row"><span class="score">${r.score} / ${r.max}</span><span>${last.text.length}자 · ${Math.round(last.secs / 60)}분 사용</span></div>
+    <div class="result"><div class="row"><span class="score">빠진 것 확인</span><span class="note">확인용 점수 ${r.score}/${r.max} · ${last.text.length}자 · ${Math.round(last.secs / 60)}분</span></div>
       ${r.missing.length ? `<ul>${r.missing.map(m => `<li>${esc(m.heading)} — ${m.earned}/${m.max}점, 빠진 것: ${esc((m.keywords || []).join(' · ') || '설명 보강')}</li>`).join('')}</ul>` : '<p>소제목별 핵심어를 모두 다뤘습니다.</p>'}
       ${r.numberIssues.length ? `<p>수치 확인: ${r.numberIssues.map(n => `${esc(n.key)} 모범 ${esc(n.model)} / 내 답안 ${esc(n.answer)}`).join(' · ')}</p>` : ''}
       ${r.missingNumbers.length ? `<p>빠진 수치: ${esc(r.missingNumbers.join(' · '))}</p>` : ''}
       ${r.presentationMissing.length ? `<p>형식 보완: ${esc(r.presentationMissing.join(' · '))}</p>` : ''}
       ${r.notices.length ? `<p>명칭 확인: ${esc(r.notices.join(' · '))}</p>` : ''}</div>
-    <h2>핵심어 (초록 = 썼음, 빨강 = 빠짐)</h2><div class="chips">${ks.map(k => `<span class="chip ${termHit(k, an) ? 'hit' : 'miss'}">${esc(k)}</span>`).join('')}</div>
+    <h2>핵심어 (실선 = 썼음, 점선 = 빠짐)</h2><div class="chips">${ks.map(k => `<span class="chip ${termHit(k, an) ? 'hit' : 'miss'}"><span class="sr">${termHit(k, an) ? '썼음: ' : '빠짐: '}</span>${esc(k)}</span>`).join('')}</div>
     <h2>나란히 보기</h2><div class="two"><div class="panel"><b>내 답안</b><pre>${esc(last.text)}</pre></div><div class="panel"><b>모범답안</b> ${badge(a)}<pre>${esc(a.answer)}</pre><p class="note">근거: ${esc(a.basis)}</p></div></div>
     <button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
 }
@@ -257,7 +261,7 @@ function renderComparePen(a, last) {
   const ks = keywords({ card, ex: exOf(a.id) }), ck = ((S.penCheck = S.penCheck || {})[a.id + '|' + last.day]) || [];
   $('v-compare').innerHTML = `<h1>4단계 · 모범답안과 비교</h1><p class="sub">손글씨 답안은 자동 채점하지 않습니다. 모범답안의 핵심어 중 내가 쓴 것을 눌러 체크하세요.</p>
     <div class="result"><div class="row"><span class="score" id="penScore">${ck.length} / ${ks.length}</span><span>핵심어 체크 · ${Math.round(last.secs / 60)}분 사용</span></div></div>
-    <h2>핵심어 (누르면 초록 = 썼음)</h2><div class="chips">${ks.map(k => `<button type="button" class="chip tap ${ck.includes(k) ? 'hit' : 'miss'}" data-kw="${esc(k)}">${esc(k)}</button>`).join('')}</div>
+    <h2>핵심어 (내가 쓴 것을 누르면 실선으로 바뀜)</h2><div class="chips">${ks.map(k => `<button type="button" class="chip tap ${ck.includes(k) ? 'hit' : 'miss'}" aria-pressed="${ck.includes(k)}" data-kw="${esc(k)}">${esc(k)}</button>`).join('')}</div>
     <h2>나란히 보기</h2><div class="two"><div class="panel"><b>내 답안</b><div class="penimgs" id="penImgs"><p class="note">불러오는 중…</p></div></div><div class="panel"><b>모범답안</b> ${badge(a)}<pre>${esc(a.answer)}</pre><p class="note">근거: ${esc(a.basis)}</p></div></div>
     <button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
   IDB.get('att|' + a.id + '|' + last.day).then(imgs => { const el = $('penImgs'); if (el) el.innerHTML = imgs && imgs.length ? imgs.map(u => `<img alt="손글씨 답안" src="${u}">`).join('') : '<p class="note">이미지를 찾지 못했습니다.</p>'; });
@@ -266,14 +270,16 @@ function toggleKw(el) {
   const a = answerOf(pickQuestion()), last = S.attempts.find(x => x.key === a.id && x.day === dayKey()); if (!last) return;
   const k = a.id + '|' + last.day; S.penCheck = S.penCheck || {}; const L = S.penCheck[k] = S.penCheck[k] || [];
   const i = L.indexOf(el.dataset.kw); if (i < 0) L.push(el.dataset.kw); else L.splice(i, 1);
-  el.classList.toggle('hit', i < 0); el.classList.toggle('miss', i >= 0);
+  el.classList.toggle('hit', i < 0); el.classList.toggle('miss', i >= 0); el.setAttribute('aria-pressed', String(i < 0));
   $('penScore').textContent = `${L.length} / ${document.querySelectorAll('[data-kw]').length}`; save();
 }
 
 // ── 5. 복습 예약 ──
 function renderReview() {
   const a = answerOf(pickQuestion()), c = S.cards[a.id];
+  const fin = todayState().done.includes('review');
   $('v-review').innerHTML = `<h1>5단계 · 복습 예약</h1><p class="sub">이 문제를 다시 볼 날을 정합니다. 간격은 1·3·7·14·30일입니다.</p>
+    ${fin ? `<div class="donebox" role="status"><b>오늘 공부 끝</b><p class="note" style="margin:4px 0 0">${c ? `이 문제는 ${fmt(c.next)}에 다시 나옵니다. ` : ''}내일은 앱이 출제 비중과 복습 일정으로 새 주제를 골라 둡니다.</p></div>` : ''}
     <div class="panel"><p class="q">${esc(a.question)}</p><p class="note">${c ? `지금 ${LADDER[c.level]}일 간격 · 다음 복습 ${fmt(c.next)}` : '처음 공부한 문제입니다.'}</p>
     <div class="rate">${[['again', '다시', '내일'], ['hard', '어려움', '간격 유지'], ['good', '보통', '다음 간격'], ['easy', '쉬움', '한 칸 건너뛰기']].map(([v, t, s]) => `<button type="button" data-rate="${v}"><b>${t}</b><span>${s}</span></button>`).join('')}</div></div>
     <h2>복습 일정</h2><div class="panel">${schedule()}</div>`;
@@ -287,8 +293,10 @@ function rate(v) {
   let level = prev ? prev.level : -1;
   level = v === 'again' ? 0 : v === 'hard' ? Math.max(0, level) : v === 'good' ? Math.min(LADDER.length - 1, level + 1) : Math.min(LADDER.length - 1, level + 2);
   const next = today(); next.setDate(next.getDate() + (v === 'again' ? 1 : LADDER[level]));
+  const tday = todayState(), prevDone = [...tday.done];
   S.cards[a.id] = { level, next: next.toISOString(), reviews: (prev ? prev.reviews : 0) + 1 };
-  markDone('review'); save(); toast(`${fmt(next.toISOString())}에 다시 봅니다`); renderReview();
+  markDone('review'); save(); renderReview();
+  toast(`${fmt(next.toISOString())}에 다시 봅니다`, () => { if (prev) S.cards[a.id] = prev; else delete S.cards[a.id]; tday.done = prevDone; save(); renderNav(); renderReview(); });
 }
 
 // ── 문항 목록 ──
@@ -309,16 +317,18 @@ function show(step) {
 }
 function renderNav(active) {
   const t = todayState();
-  document.querySelectorAll('.step').forEach(b => { b.classList.toggle('on', b.dataset.step === (active || document.querySelector('.view.on')?.id.slice(2))); b.classList.toggle('done', t.done.includes(b.dataset.step)); });
+  const cur = active || document.querySelector('.view.on')?.id.slice(2);
+  document.querySelectorAll('.step').forEach(b => { const on = b.dataset.step === cur; b.classList.toggle('on', on); b.toggleAttribute('aria-current', on); if (on) b.setAttribute('aria-current', 'step'); b.classList.toggle('done', t.done.includes(b.dataset.step)); if (on && b.scrollIntoView && innerWidth <= 900) b.scrollIntoView({ inline: 'center', block: 'nearest' }); });
+  document.body.classList.toggle('focus', cur === 'write');
 }
 
 document.addEventListener('click', e => {
   const el = e.target.closest('button'); if (!el) return;
-  if (el.classList.contains('blank')) { el.classList.add('shown'); updateRecallCount(); return; }
+  if (el.classList.contains('blank')) { el.classList.add('shown'); el.removeAttribute('aria-label'); el.firstElementChild && el.firstElementChild.removeAttribute('aria-hidden'); updateRecallCount(); return; }
   if (el.dataset.step) return show(el.dataset.step);
   if (el.dataset.done) markDone(el.dataset.done);
   if (el.dataset.go) return show(el.dataset.go);
-  if (el.dataset.recall) { const t = todayState(); t.recall = el.dataset.recall; markDone('recall'); save(); return show(['some', 'none'].includes(el.dataset.recall) ? 'read' : 'write'); }
+  if (el.dataset.recall) { const t = todayState(), prev = { recall: t.recall, done: [...t.done] }; t.recall = el.dataset.recall; markDone('recall'); save(); show(['some', 'none'].includes(el.dataset.recall) ? 'read' : 'write'); toast('떠올리기 평가를 기록했습니다', () => { t.recall = prev.recall; t.done = prev.done; save(); show('recall'); }); return; }
   if (el.dataset.rate) return rate(el.dataset.rate);
   if (el.dataset.kw !== undefined) return toggleKw(el);
   if (el.dataset.pick) { todayState().q = el.dataset.pick; const t = todayState(); t.done = t.done.filter(s => s === 'read' || s === 'recall'); save(); toast('오늘의 문제를 바꿨습니다'); return show('today'); }
@@ -350,8 +360,8 @@ document.addEventListener('click', e => {
     S.attempts.unshift({ key, day: dayKey(), text, secs: spent, at: new Date().toISOString() });
     clearInterval(timer); timer = null; markDone('write'); save(); show('compare');
   }
-  if (el.id === 'exportBtn') { const blob = new Blob([JSON.stringify({ app: '수자원기술사 학습', at: new Date().toISOString(), state: S }, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `기술사학습기록_${dayKey()}.json`; a.click(); }
-  if (el.id === 'importBtn') $('importFile').click();
+  if (el.id === 'exportBtn') { const blob = new Blob([JSON.stringify({ app: '수자원기술사 학습', at: new Date().toISOString(), state: S }, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `기술사학습기록_${dayKey()}.json`; a.click(); $('recMenu').open = false; }
+  if (el.id === 'importBtn') { $('importFile').click(); $('recMenu').open = false; }
 });
 $('importFile').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;

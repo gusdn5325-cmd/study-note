@@ -3,20 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>수자원기술사 학습</title>
-<meta name="theme-color" content="#083D51">
+<title>수자원개발기술사 학습</title>
+<meta name="theme-color" content="#ffffff">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=202611131624">
+<link rel="stylesheet" href="style.css?v=202611140806">
 </head>
 <body>
 <header class="top">
   <div class="brand"><b>수자원개발기술사 학습</b><select id="topicSel" aria-label="주제"></select><span id="topicLine"></span></div>
-  <div class="top-actions">
-    <button class="ghost" id="exportBtn" type="button">기록 내보내기</button>
-    <button class="ghost" id="importBtn" type="button">기록 가져오기</button>
-    <input id="importFile" type="file" accept="application/json" hidden>
-  </div>
+  <details class="menu" id="recMenu"><summary>기록 관리</summary>
+    <div class="pop"><p>공부 기록은 이 기기에만 저장됩니다. 다른 기기로 옮길 때 씁니다.</p>
+      <button class="ghost" id="exportBtn" type="button">기록 파일로 저장</button>
+      <button class="ghost" id="importBtn" type="button">기록 파일 불러오기(현재 기록 바뀜)</button>
+      <input id="importFile" type="file" accept="application/json" hidden></div>
+  </details>
 </header>
 
 <div class="shell">
@@ -43,9 +47,9 @@
 </div>
 <div id="toast" class="toast" role="status"></div>
 
-<script src="data.js?v=202611131624"></script>
-<script src="scoring.js?v=202611131624"></script>
-<script src="study.js?v=202611131624"></script>
+<script src="data.js?v=202611140806"></script>
+<script src="scoring.js?v=202611140806"></script>
+<script src="study.js?v=202611140806"></script>
 <script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 </body>
 </html>
