@@ -5,6 +5,7 @@ const D = window.STUDY_DATA;
 const KEY = 'pe-study-v1';
 const LADDER = [1, 3, 7, 14, 30];
 const STEPS = ['read', 'recall', 'write', 'compare', 'review'];
+const SHORT = { read: '읽기', recall: '떠올리기', write: '쓰기', compare: '비교', review: '복습' };
 
 // scoring.js가 쓰는 전역 db (02 앱과 같은 모양) — 주제별 카드, 핵심어 가중치(IDF)는 전체 답안 기준
 var db = { topics: [], cards: D.topics.map(t => ({ id: t.prefix, name: t.subnote.topic, skel: [], ex: t.answers.map(a => ({ q: a.question, a: a.answer, g: a.gyosi, h: a.source && a.source.h, n: a.source && a.source.n, _id: a.id })) })) };
@@ -86,7 +87,7 @@ function renderToday() {
     ${isAuto() ? (() => { const p = autoTopic(), f = D.topics[TI].freq || {}, dd = daysToExam();
       const head = dd !== null ? `시험까지 D-${dd}${recentK() === 4 ? ' (막판 4주: 최근 출제 비중 강화)' : ''}. ` : '';
       return `<p class="note">${head}${p.why === 'due' ? `복습할 문항이 ${p.n}건 쌓여 있어 이 주제를 먼저 골랐습니다.` : `오늘의 추천: 이 주제의 목표 비중은 ${Math.round(p.share * 100)}%(누적 ${f.tot}회·최근 6회 ${f.rec}회${p.weak > 1.05 ? '·약점 가중' : p.weak < 0.95 ? '·잘 아는 주제라 감량' : ''})인데, 지금까지 ${p.done}일 공부해 목표(${p.target.toFixed(1)}일)보다 가장 덜 했습니다.`}</p>`; })() : ''}
-    <div class="todo">${STEPS.map((s, i) => `<div class="${t.done.includes(s) ? 'done' : ''}"><b>${i + 1}단계</b>${names[s]}${t.done.includes(s) ? ' · 완료' : ''}</div>`).join('')}</div>
+    <div class="todo">${STEPS.map((s, i) => `<div class="${t.done.includes(s) ? 'done' : ''}"><b>${i + 1}단계${t.done.includes(s) ? ' ✓' : ''}</b><span class="lbl">${names[s]}</span><span class="sh">${SHORT[s]}</span></div>`).join('')}</div>
     <div class="panel"><div class="row"><span class="badge">${a.gyosi}교시 · ${a.max}점 · ${minutes(a)}분</span>${badge(a)}${isDue(a.id) ? '<span class="badge due">복습</span>' : ''}<span class="badge">${esc(a.type)}</span></div>
       <p class="q">${esc(a.question)}</p>
       <p class="note">오늘의 문제입니다. 1·2단계로 서브노트를 익힌 뒤 3단계에서 이 문제를 씁니다.</p>
@@ -142,22 +143,103 @@ function updateRecallCount() { const all = document.querySelectorAll('#recallBod
 let timer = null, remain = 0, spent = 0;
 function renderWrite() {
   const a = answerOf(pickQuestion()), draft = S.drafts[a.id] || '', target = a.gyosi === 1 ? 500 : 1300;
+  const pen = S.writeMode === 'pen';
   $('v-write').innerHTML = `<h1>3단계 · 시간 재고 쓰기</h1><p class="sub">모범답안을 보지 않고 씁니다. 권장 분량 ${target}자(답안지 ${a.gyosi === 1 ? '약 1.3쪽' : '3~4쪽'}).</p>
     <div class="panel"><div class="row"><span class="badge">${a.gyosi}교시 · ${a.max}점</span><span class="badge">${esc(a.type)}</span></div><p class="q">${esc(a.question)}</p>
       <div class="row"><span class="timer" id="timer">${minutes(a)}:00</span><button class="ghost" id="timerBtn" type="button">시작</button><span class="note">목표 ${minutes(a)}분</span>
-      <div class="meter"><i id="lenBar" style="width:0"></i></div><span class="note" id="lenText">0 / ${target}자</span></div></div>
-    <textarea id="answer" placeholder="Ⅰ. 개요 → Ⅱ. 본론(번호체계) → 표·모식도 → 근거 조항 → 실무 의견">${esc(draft)}</textarea>
+      ${pen ? '' : `<div class="meter"><i id="lenBar" style="width:0"></i></div><span class="note" id="lenText">0 / ${target}자</span>`}</div></div>
+    <div class="modebar"><div class="seg"><button type="button" data-mode="text" class="${pen ? '' : 'on'}">글자 입력</button><button type="button" data-mode="pen" class="${pen ? 'on' : ''}">펜 손글씨</button></div>
+      <span class="note">${pen ? '실제 답안지처럼 펜으로 씁니다. 손가락으로는 화면을 넘깁니다. 4단계에서 핵심어를 직접 체크합니다.' : '아이패드에서는 이 칸에 애플펜슬로 쓰면 글자로 바뀝니다(손글씨 입력 기능 — 기기에서 한국어 지원 여부 확인).'}</span></div>
+    ${pen ? `<div class="pentools"><button class="ghost on" type="button" data-tool="pen">펜</button><button class="ghost" type="button" data-tool="eraser">지우개</button><button class="ghost" type="button" id="penUndo">되돌리기</button><button class="ghost" type="button" id="penAddPage">쪽 추가</button><button class="ghost" type="button" id="penClear">이 쪽 지우기</button><label class="note"><input type="checkbox" id="fingerDraw"> 손가락으로도 쓰기</label></div><div class="pages" id="pages"></div>`
+      : `<textarea id="answer" placeholder="Ⅰ. 개요 → Ⅱ. 본론(번호체계) → 표·모식도 → 근거 조항 → 실무 의견">${esc(draft)}</textarea>`}
     <div class="row" style="margin-top:10px"><button class="ghost" id="saveDraft" type="button">임시저장</button><button class="primary" id="submitAnswer" type="button">작성 완료 → 4단계 비교</button></div>`;
   remain = minutes(a) * 60; spent = 0; clearInterval(timer); timer = null;
+  if (pen) { PEN.open(a.id, a.gyosi === 1 ? 2 : 4); return; }
   const ta = $('answer'); const upd = () => { const n = ta.value.length; $('lenText').textContent = `${n} / ${target}자`; $('lenBar').style.width = Math.min(100, n / target * 100) + '%'; };
   ta.addEventListener('input', upd); upd();
 }
+
+// ── 펜 손글씨: 획을 쪽 너비 기준 비율 좌표로 저장해 가로·세로 전환 때 다시 그린다. 저장은 IndexedDB ──
+const IDB = {
+  db: null,
+  open() { return this.db ? Promise.resolve(this.db) : new Promise((ok, no) => { const r = indexedDB.open('pe-study-pen', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => ok(this.db = r.result); r.onerror = () => no(r.error); }); },
+  async get(k) { const d = await this.open(); return new Promise(ok => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => ok(q.result); q.onerror = () => ok(undefined); }); },
+  async set(k, v) { const d = await this.open(); return new Promise(ok => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => ok(true); t.onerror = () => ok(false); }); },
+};
+const PEN = {
+  key: null, pages: [], tool: 'pen', ro: null, t: null,
+  async open(id, minPages) {
+    this.key = 'draft|' + id; this.tool = 'pen';
+    let saved = null; try { saved = await IDB.get(this.key); } catch (e) { saved = null; }
+    this.pages = saved && saved.length ? saved : Array.from({ length: minPages }, () => []);
+    this.render();
+    if (this.ro) this.ro.disconnect();
+    if (window.ResizeObserver) { this.ro = new ResizeObserver(() => this.redrawAll()); this.ro.observe($('pages')); }
+  },
+  render() {
+    $('pages').innerHTML = this.pages.map((_, i) => `<div class="sheet"><canvas data-page="${i}"></canvas><span class="pno">${i + 1}쪽</span></div>`).join('');
+    document.querySelectorAll('#pages canvas').forEach(c => this.bind(c)); this.redrawAll();
+  },
+  size(c) { const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr); if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } return { w, h }; },
+  redrawAll() { document.querySelectorAll('#pages canvas').forEach(c => this.redraw(c)); },
+  redraw(c) {
+    const { w, h } = this.size(c), g = c.getContext('2d'); g.clearRect(0, 0, w, h);
+    g.strokeStyle = '#dfe6ee'; g.lineWidth = 1; const rows = 22, top = h * 0.06, gap = (h * 0.9) / rows;   // 답안지처럼 줄
+    for (let i = 0; i <= rows; i++) { g.beginPath(); g.moveTo(w * 0.04, top + i * gap); g.lineTo(w * 0.96, top + i * gap); g.stroke(); }
+    (this.pages[+c.dataset.page] || []).forEach(st => this.drawStroke(g, st, w));
+  },
+  drawStroke(g, st, w) {
+    g.globalCompositeOperation = st.e ? 'destination-out' : 'source-over'; g.strokeStyle = '#14233a'; g.lineCap = 'round'; g.lineJoin = 'round';
+    const p = st.p;
+    if (p.length === 1) { g.beginPath(); g.fillStyle = '#14233a'; g.arc(p[0][0] * w, p[0][1] * w, (0.0022 + 0.0028 * p[0][2]) * w / 2, 0, 7); g.fill(); }
+    for (let i = 1; i < p.length; i++) { g.beginPath(); g.lineWidth = (st.e ? 0.03 : 0.0022 + 0.0028 * p[i][2]) * w; g.moveTo(p[i - 1][0] * w, p[i - 1][1] * w); g.lineTo(p[i][0] * w, p[i][1] * w); g.stroke(); }
+    g.globalCompositeOperation = 'source-over';
+  },
+  bind(c) {
+    let cur = null, lastY = 0;
+    const pt = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.width, e.pressure || 0.5]; };
+    c.addEventListener('pointerdown', e => {
+      const finger = e.pointerType === 'touch' && !($('fingerDraw') && $('fingerDraw').checked);
+      try { c.setPointerCapture(e.pointerId); } catch (_) { /* 포인터 고정 실패해도 그리기는 계속 */ }
+      if (finger) { lastY = e.clientY; cur = 'scroll'; return; }   // 손가락: 화면 넘기기(손바닥 오작동 방지)
+      e.preventDefault();
+      cur = { e: this.tool === 'eraser' ? 1 : 0, p: [pt(e)] }; this.pages[+c.dataset.page].push(cur);
+      this.drawStroke(c.getContext('2d'), cur, c.width);
+    });
+    c.addEventListener('pointermove', e => {
+      if (!cur) return;
+      if (cur === 'scroll') { window.scrollBy(0, lastY - e.clientY); lastY = e.clientY; return; }
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      const g = c.getContext('2d'), w = c.width;
+      evs.forEach(ev => { cur.p.push(pt(ev)); this.drawStroke(g, { e: cur.e, p: cur.p.slice(-2) }, w); });
+    });
+    const end = () => { if (cur && cur !== 'scroll') this.autosave(); cur = null; };
+    c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+  },
+  autosave() { clearTimeout(this.t); this.t = setTimeout(() => IDB.set(this.key, this.pages), 600); },
+  undo() { for (let i = this.pages.length - 1; i >= 0; i--) if (this.pages[i].length) { this.pages[i].pop(); break; } this.redrawAll(); this.autosave(); },
+  addPage() { this.pages.push([]); this.render(); this.autosave(); },
+  clearPage() {
+    const sheets = [...document.querySelectorAll('#pages .sheet')], mid = innerHeight / 2;
+    let i = sheets.findIndex(sh => { const r = sh.getBoundingClientRect(); return r.top <= mid && r.bottom >= mid; }); if (i < 0) i = 0;
+    if (!this.pages[i].length || !confirm(`${i + 1}쪽을 모두 지울까요?`)) return; this.pages[i] = []; this.redrawAll(); this.autosave();
+  },
+  inkCount() { return this.pages.reduce((n, p) => n + p.filter(st => !st.e).length, 0); },
+  exportImages() {   // 비교 화면용 이미지(줄 포함, 쓴 쪽만)
+    return Promise.resolve([...document.querySelectorAll('#pages canvas')].filter((_, i) => this.pages[i].length).map(c => {
+      const o = document.createElement('canvas'), k = 900 / c.width; o.width = 900; o.height = Math.round(c.height * k);
+      const g = o.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, o.width, o.height); g.drawImage(c, 0, 0, o.width, o.height); return o.toDataURL('image/jpeg', 0.75);
+    }));
+  },
+};
+
 function tick() { remain--; spent++; const m = Math.floor(Math.abs(remain) / 60), s = String(Math.abs(remain) % 60).padStart(2, '0'); const el = $('timer'); if (!el) return; el.textContent = `${remain < 0 ? '+' : ''}${m}:${s}`; el.classList.toggle('over', remain < 0); }
 
 // ── 4. 비교 ──
 function renderCompare() {
   const a = answerOf(pickQuestion()), last = S.attempts.find(x => x.key === a.id && x.day === dayKey());
   if (!last) { $('v-compare').innerHTML = `<h1>4단계 · 모범답안과 비교</h1><div class="panel">3단계에서 답안을 먼저 써 주세요.<br><br><button class="primary" data-go="write">3단계로</button></div>`; return; }
+  if (last.pen) return renderComparePen(a, last);
   const q = { card, ex: exOf(a.id) }, r = scoreAnswer(q, last.text), ks = keywords(q), an = normal(last.text);
   $('v-compare').innerHTML = `<h1>4단계 · 모범답안과 비교</h1><p class="sub">점수는 모범답안 핵심어·형식·분량으로 계산한 "빠진 것 확인용"입니다. 실제 채점과 다릅니다.</p>
     <div class="result"><div class="row"><span class="score">${r.score} / ${r.max}</span><span>${last.text.length}자 · ${Math.round(last.secs / 60)}분 사용</span></div>
@@ -169,6 +251,23 @@ function renderCompare() {
     <h2>핵심어 (초록 = 썼음, 빨강 = 빠짐)</h2><div class="chips">${ks.map(k => `<span class="chip ${termHit(k, an) ? 'hit' : 'miss'}">${esc(k)}</span>`).join('')}</div>
     <h2>나란히 보기</h2><div class="two"><div class="panel"><b>내 답안</b><pre>${esc(last.text)}</pre></div><div class="panel"><b>모범답안</b> ${badge(a)}<pre>${esc(a.answer)}</pre><p class="note">근거: ${esc(a.basis)}</p></div></div>
     <button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
+}
+
+function renderComparePen(a, last) {
+  const ks = keywords({ card, ex: exOf(a.id) }), ck = ((S.penCheck = S.penCheck || {})[a.id + '|' + last.day]) || [];
+  $('v-compare').innerHTML = `<h1>4단계 · 모범답안과 비교</h1><p class="sub">손글씨 답안은 자동 채점하지 않습니다. 모범답안의 핵심어 중 내가 쓴 것을 눌러 체크하세요.</p>
+    <div class="result"><div class="row"><span class="score" id="penScore">${ck.length} / ${ks.length}</span><span>핵심어 체크 · ${Math.round(last.secs / 60)}분 사용</span></div></div>
+    <h2>핵심어 (누르면 초록 = 썼음)</h2><div class="chips">${ks.map(k => `<button type="button" class="chip tap ${ck.includes(k) ? 'hit' : 'miss'}" data-kw="${esc(k)}">${esc(k)}</button>`).join('')}</div>
+    <h2>나란히 보기</h2><div class="two"><div class="panel"><b>내 답안</b><div class="penimgs" id="penImgs"><p class="note">불러오는 중…</p></div></div><div class="panel"><b>모범답안</b> ${badge(a)}<pre>${esc(a.answer)}</pre><p class="note">근거: ${esc(a.basis)}</p></div></div>
+    <button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
+  IDB.get('att|' + a.id + '|' + last.day).then(imgs => { const el = $('penImgs'); if (el) el.innerHTML = imgs && imgs.length ? imgs.map(u => `<img alt="손글씨 답안" src="${u}">`).join('') : '<p class="note">이미지를 찾지 못했습니다.</p>'; });
+}
+function toggleKw(el) {
+  const a = answerOf(pickQuestion()), last = S.attempts.find(x => x.key === a.id && x.day === dayKey()); if (!last) return;
+  const k = a.id + '|' + last.day; S.penCheck = S.penCheck || {}; const L = S.penCheck[k] = S.penCheck[k] || [];
+  const i = L.indexOf(el.dataset.kw); if (i < 0) L.push(el.dataset.kw); else L.splice(i, 1);
+  el.classList.toggle('hit', i < 0); el.classList.toggle('miss', i >= 0);
+  $('penScore').textContent = `${L.length} / ${document.querySelectorAll('[data-kw]').length}`; save();
 }
 
 // ── 5. 복습 예약 ──
@@ -221,10 +320,29 @@ document.addEventListener('click', e => {
   if (el.dataset.go) return show(el.dataset.go);
   if (el.dataset.recall) { const t = todayState(); t.recall = el.dataset.recall; markDone('recall'); save(); return show(['some', 'none'].includes(el.dataset.recall) ? 'read' : 'write'); }
   if (el.dataset.rate) return rate(el.dataset.rate);
+  if (el.dataset.kw !== undefined) return toggleKw(el);
   if (el.dataset.pick) { todayState().q = el.dataset.pick; const t = todayState(); t.done = t.done.filter(s => s === 'read' || s === 'recall'); save(); toast('오늘의 문제를 바꿨습니다'); return show('today'); }
   if (el.id === 'revealAll') { document.querySelectorAll('#recallBody .blank').forEach(b => b.classList.add('shown')); updateRecallCount(); }
   if (el.id === 'timerBtn') { if (timer) { clearInterval(timer); timer = null; el.textContent = '계속'; } else { timer = setInterval(tick, 1000); el.textContent = '일시정지'; } }
-  if (el.id === 'saveDraft') { S.drafts[pickQuestion()] = $('answer').value; save(); toast('임시저장했습니다'); }
+  if (el.dataset.mode) { S.writeMode = el.dataset.mode; save(); return renderWrite(); }
+  if (el.dataset.tool) { PEN.tool = el.dataset.tool; document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b === el)); return; }
+  if (el.id === 'penUndo') return PEN.undo();
+  if (el.id === 'penAddPage') return PEN.addPage();
+  if (el.id === 'penClear') return PEN.clearPage();
+  if (el.id === 'saveDraft') {
+    if (S.writeMode === 'pen') { IDB.set(PEN.key, PEN.pages); toast('손글씨를 임시저장했습니다'); return; }
+    S.drafts[pickQuestion()] = $('answer').value; save(); toast('임시저장했습니다');
+  }
+  if (el.id === 'submitAnswer' && S.writeMode === 'pen') {
+    if (PEN.inkCount() < 20) { toast('조금 더 쓴 뒤 완료하세요'); return; }
+    const key = pickQuestion(); clearInterval(timer); timer = null;
+    PEN.exportImages().then(imgs => IDB.set('att|' + key + '|' + dayKey(), imgs)).then(() => {
+      S.attempts = S.attempts.filter(x => !(x.key === key && x.day === dayKey()));
+      S.attempts.unshift({ key, day: dayKey(), text: '', pen: true, secs: spent, at: new Date().toISOString() });
+      IDB.set(PEN.key, PEN.pages); markDone('write'); save(); show('compare');
+    });
+    return;
+  }
   if (el.id === 'submitAnswer') {
     const text = $('answer').value.trim(); if (text.length < 50) { toast('50자 이상 쓴 뒤 완료하세요'); return; }
     const key = pickQuestion(); S.drafts[key] = text;
@@ -252,3 +370,5 @@ $('topicSel').addEventListener('change', e => {
 });
 $('topicLine').textContent = `자료 ${D.built}`;
 show('today');
+const setTopH = () => document.documentElement.style.setProperty('--topH', document.querySelector('.top').offsetHeight + 'px');
+setTopH(); addEventListener('resize', setTopH); addEventListener('orientationchange', () => setTimeout(setTopH, 300));

@@ -52,5 +52,72 @@ textarea{width:100%;min-height:420px;border:1px solid var(--line);border-radius:
 .list-item button{justify-self:end}
 .note{font-size:.76rem;color:var(--muted)}
 .toast{position:fixed;right:20px;bottom:20px;background:var(--navy);color:#fff;padding:10px 14px;border-radius:6px;font-size:.82rem;opacity:0;transition:opacity .2s;pointer-events:none}.toast.on{opacity:1}
-@media(max-width:900px){.shell{grid-template-columns:1fr}.steps{flex-direction:row;overflow-x:auto}.steps hr{display:none}.two,.todo,.rate{grid-template-columns:1fr}main{padding:16px}}
 #topicSel{margin-right:10px;padding:5px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.4);background:#123f50;color:#fff;font:inherit;font-size:.82rem}
+
+/* ── 반응형(2026-11-13): 아이폰·아이패드 가로/세로 ── */
+html{-webkit-text-size-adjust:100%}
+body{font-size:16px;padding-bottom:env(safe-area-inset-bottom)}
+.top{position:sticky;top:0;z-index:20;flex-wrap:wrap;padding:calc(10px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 10px max(16px,env(safe-area-inset-left))}
+.brand{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;min-width:0;flex:1}
+.brand b{white-space:nowrap}
+#topicSel{max-width:100%;min-height:36px}
+.step{white-space:nowrap;min-height:40px}
+.ghost,.primary{min-height:40px}
+.todo div{display:flex;flex-direction:column;justify-content:center}
+@media(max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .steps{position:sticky;top:var(--topH,96px);z-index:15;flex-direction:row;gap:4px;padding:8px max(10px,env(safe-area-inset-left));overflow-x:auto;scrollbar-width:none;border-right:0;border-bottom:1px solid var(--line)}
+  .steps::-webkit-scrollbar{display:none}
+  .steps hr{display:none}
+  .step{flex:0 0 auto;padding:6px 12px;font-size:.84rem;border-radius:20px;background:#eef1ef}
+  .step i{width:20px;height:20px}
+  main{padding:16px max(14px,env(safe-area-inset-right)) 60px max(14px,env(safe-area-inset-left))}
+  .two,.rate{grid-template-columns:1fr}
+  .todo{grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
+  .todo div{padding:8px 4px;text-align:center;font-size:.72rem;line-height:1.3}
+  .todo b{font-size:.68rem}
+  .list-item{grid-template-columns:1fr;gap:6px}
+  .list-item button{justify-self:start}
+  .two pre{max-height:none}
+}
+@media(max-width:520px){
+  .top-actions .ghost{padding:5px 9px;font-size:.72rem;min-height:32px}
+  #topicSel{width:100%;margin-right:0}
+  .brand b{font-size:.95rem}
+  h1{font-size:1.12rem}
+  .todo .lbl{display:none}
+  .panel{padding:14px}
+  .rate{grid-template-columns:repeat(2,1fr)}
+}
+@media(min-width:901px) and (max-width:1199px){.shell{grid-template-columns:180px minmax(0,1fr)}main{padding:20px 22px 60px}}
+/* 펜 손글씨 */
+.modebar{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:#fff;padding:8px 14px;font-weight:700;color:var(--navy);min-height:40px}
+.seg button.on{background:var(--navy);color:#fff}
+.pentools{position:sticky;top:calc(var(--topH,96px) + 50px);z-index:10;display:flex;gap:6px;flex-wrap:wrap;align-items:center;background:var(--bg);padding:6px 0}
+@media(min-width:901px){.pentools{top:var(--topH,60px)}}
+.pentools button{min-width:44px}
+.pentools button.on{background:var(--navy);color:#fff}
+.pages{display:flex;flex-direction:column;gap:14px}
+.sheet{position:relative;width:100%;aspect-ratio:1/1.414;background:#fff;border:1px solid var(--line);border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.sheet canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+.sheet .pno{position:absolute;right:8px;bottom:4px;font-size:.7rem;color:var(--muted)}
+.penimgs img{width:100%;border:1px solid var(--line);border-radius:4px;background:#fff;margin-bottom:8px}
+.chip.tap{cursor:pointer;border:0;font:inherit;font-size:.78rem}
+
+.todo .sh{display:none}
+@media(max-width:520px){.todo .sh{display:block;font-weight:700}}
+.list-item>.badge{justify-self:start}
+@media(max-width:520px){.brand{flex-basis:100%}.top-actions{width:100%;justify-content:flex-end}}
+@media(max-width:900px){.top{position:static}.steps{top:0}.pentools{top:52px}}
+@media(max-width:520px){.top-actions{width:auto;margin-left:auto}.brand{flex-basis:auto}#topicSel{order:3;flex-basis:100%}}
+main{min-width:0}.badge{white-space:normal;max-width:100%;overflow-wrap:anywhere}
+@media(max-width:900px){.shell{grid-template-columns:minmax(0,1fr)}table{display:block;overflow-x:auto}pre,pre.fig{overflow-x:auto}}
+/* 단계 버튼은 한 줄 알약 모양 유지, 배지는 한 줄(긴 설명 배지만 줄바꿈) */
+.steps{align-items:center}
+@media(max-width:900px){.steps{align-items:center;min-height:0}.step{height:40px;min-height:0;align-self:center}}
+.badge{white-space:nowrap;overflow-wrap:normal}
+.sub .badge,.badge.wrap{white-space:normal;overflow-wrap:anywhere}
+.list-item{grid-template-columns:max-content minmax(0,1fr) auto}
+@media(max-width:900px){.list-item{grid-template-columns:minmax(0,1fr)}}
