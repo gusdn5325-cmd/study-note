@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>수자원기술사 학습</title>
+<meta name="theme-color" content="#083D51">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>수자원개발기술사 학습</b><select id="topicSel" aria-label="주제"></select><span id="topicLine"></span></div>
+  <div class="top-actions">
+    <button class="ghost" id="exportBtn" type="button">기록 내보내기</button>
+    <button class="ghost" id="importBtn" type="button">기록 가져오기</button>
+    <input id="importFile" type="file" accept="application/json" hidden>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="steps" aria-label="학습 단계">
+    <button class="step" data-step="today"><i>0</i>오늘 할 일</button>
+    <button class="step" data-step="read"><i>1</i>서브노트 읽기</button>
+    <button class="step" data-step="recall"><i>2</i>가리고 떠올리기</button>
+    <button class="step" data-step="write"><i>3</i>시간 재고 쓰기</button>
+    <button class="step" data-step="compare"><i>4</i>모범답안과 비교</button>
+    <button class="step" data-step="review"><i>5</i>복습 예약</button>
+    <hr>
+    <button class="step" data-step="list"><i>≡</i>문항 목록</button>
+  </nav>
+
+  <main id="main">
+    <section id="v-today" class="view"></section>
+    <section id="v-read" class="view"></section>
+    <section id="v-recall" class="view"></section>
+    <section id="v-write" class="view"></section>
+    <section id="v-compare" class="view"></section>
+    <section id="v-review" class="view"></section>
+    <section id="v-list" class="view"></section>
+  </main>
+</div>
+<div id="toast" class="toast" role="status"></div>
+
+<script src="data.js"></script>
+<script src="scoring.js?v=20261110b"></script>
+<script src="study.js"></script>
+<script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
+</body>
+</html>
