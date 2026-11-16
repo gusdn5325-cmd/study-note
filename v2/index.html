@@ -10,16 +10,18 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=202611140806">
+<link rel="stylesheet" href="style.css?v=202611170810">
 </head>
 <body>
 <header class="top">
   <div class="brand"><b>수자원개발기술사 학습</b><select id="topicSel" aria-label="주제"></select><span id="topicLine"></span></div>
   <details class="menu" id="recMenu"><summary>기록 관리</summary>
-    <div class="pop"><p>공부 기록은 이 기기에만 저장됩니다. 다른 기기로 옮길 때 씁니다.</p>
-      <button class="ghost" id="exportBtn" type="button">기록 파일로 저장</button>
-      <button class="ghost" id="importBtn" type="button">기록 파일 불러오기(현재 기록 바뀜)</button>
-      <input id="importFile" type="file" accept="application/json" hidden></div>
+    <div class="pop"><p>공부 기록은 이 기기에만 저장됩니다. 아이폰·아이패드를 오갈 때 씁니다.</p>
+      <label class="chk"><input type="checkbox" id="withPen" checked> 손글씨 포함 <span id="penSize"></span></label>
+      <button class="ghost" id="exportBtn" type="button">기록 내보내기</button>
+      <button class="ghost" id="importBtn" type="button">불러와 합치기(권장)</button>
+      <button class="ghost" id="replaceBtn" type="button">불러와 통째로 바꾸기</button>
+      <input id="importFile" type="file" accept="application/json,.json" hidden></div>
   </details>
 </header>
 
@@ -47,9 +49,9 @@
 </div>
 <div id="toast" class="toast" role="status"></div>
 
-<script src="data.js?v=202611140806"></script>
-<script src="scoring.js?v=202611140806"></script>
-<script src="study.js?v=202611140806"></script>
+<script src="data.js?v=202611170810"></script>
+<script src="scoring.js?v=202611170810"></script>
+<script src="study.js?v=202611170810"></script>
 <script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 </body>
 </html>

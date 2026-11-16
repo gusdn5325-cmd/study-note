@@ -34,6 +34,14 @@ function toast(t, undo) {
 // 매일 '비중 × 지금까지 공부한 날 수' 대비 가장 덜 한 주제를 고른다(운에 의한 치우침·긴 공백 방지). 복습이 쌓였으면 그 주제 먼저.
 const EXAM = D.examDate ? new Date(D.examDate + 'T00:00:00') : null;
 const daysToExam = () => EXAM ? Math.ceil((EXAM - today()) / 86400000) : null;
+// 시험일이 공고로 확인되기 전에는 '미확정'으로 보이고, 남은 날은 임시 날짜 기준이라고 밝힌다
+const examLabel = () => { const d = daysToExam(); if (d === null) return ''; return D.examConfirmed ? ` · 시험까지 D-${d}` : ` · 시험일 미확정(공고 전, 임시 ${EXAM.getMonth() + 1}월 ${EXAM.getDate()}일 기준 D-${d})`; };
+function backupNote() {
+  if (!S.attempts.length && !Object.keys(S.cards).length) return '';
+  const last = S.lastExport ? Math.floor((today() - new Date(S.lastExport)) / 86400000) : null;
+  if (last !== null && last < 7) return '';
+  return `<p class="note warnline">${last === null ? '아직 기록을 내보낸 적이 없습니다.' : `마지막 내보내기 ${last}일 전.`} 위쪽 '기록 관리'에서 내보내 두세요.</p>`;
+}
 const recentK = () => { const d = daysToExam(); return d !== null && d <= 28 ? 4 : 2; };
 const baseWeight = t => (t.freq ? t.freq.tot + recentK() * t.freq.rec : 1);
 function weakness(i) {
@@ -88,7 +96,8 @@ function renderToday() {
   const due = ANS.filter(x => isDue(x.id)).length, seen = ANS.filter(a => S.cards[a.id]).length;
   const names = { read: '서브노트 읽기', recall: '가리고 떠올리기', write: '시간 재고 쓰기', compare: '모범답안과 비교', review: '복습 예약' };
   $('v-today').innerHTML = `
-    <h1>오늘 할 일</h1><p class="sub">${esc(SN.topic)}${daysToExam() !== null ? ` · 시험까지 D-${daysToExam()}` : ''}${due ? ` · 복습 ${due}건` : ''}</p>
+    <h1>오늘 할 일</h1><p class="sub">${esc(SN.topic)}${examLabel()}${due ? ` · 복습 ${due}건` : ''}</p>
+    ${backupNote()}
     ${isAuto() ? (() => { const p = autoTopic(), f = D.topics[TI].freq || {};
       const why = p.why === 'due' ? `복습할 문항이 ${p.n}건 쌓여 있어 이 주제를 먼저 골랐습니다.` : `이 주제는 출제 비중 ${Math.round(p.share * 100)}%(누적 ${f.tot}회, 최근 6회 ${f.rec}회)입니다. 지금까지 ${p.done}일 공부해 비중 대비 가장 덜 한 주제라서 골랐습니다.${p.weak > 1.05 ? ' 복습 평가가 낮아 더 자주 나옵니다.' : p.weak < 0.95 ? ' 잘 아는 주제라 덜 나옵니다.' : ''}${recentK() === 4 ? ' 시험 4주 전이라 최근 출제를 더 무겁게 봅니다.' : ''}`;
       return `<details class="why"><summary>왜 이 주제?</summary><p class="note">${why} 공부한 문항 ${seen}/${ANS.length}.</p></details>`; })() : `<p class="note">공부한 문항 ${seen}/${ANS.length}</p>`}
@@ -169,6 +178,12 @@ const IDB = {
   open() { return this.db ? Promise.resolve(this.db) : new Promise((ok, no) => { const r = indexedDB.open('pe-study-pen', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => ok(this.db = r.result); r.onerror = () => no(r.error); }); },
   async get(k) { const d = await this.open(); return new Promise(ok => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => ok(q.result); q.onerror = () => ok(undefined); }); },
   async set(k, v) { const d = await this.open(); return new Promise(ok => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => ok(true); t.onerror = () => ok(false); }); },
+  async all() {   // 백업용: 손글씨 전체 {키: 값}
+    const d = await this.open(); return new Promise(ok => {
+      const out = {}, q = d.transaction('kv').objectStore('kv').openCursor();
+      q.onsuccess = () => { const c = q.result; if (c) { out[c.key] = c.value; c.continue(); } else ok(out); }; q.onerror = () => ok(out);
+    });
+  },
 };
 const PEN = {
   key: null, pages: [], tool: 'pen', ro: null, t: null,
@@ -360,13 +375,57 @@ document.addEventListener('click', e => {
     S.attempts.unshift({ key, day: dayKey(), text, secs: spent, at: new Date().toISOString() });
     clearInterval(timer); timer = null; markDone('write'); save(); show('compare');
   }
-  if (el.id === 'exportBtn') { const blob = new Blob([JSON.stringify({ app: '수자원기술사 학습', at: new Date().toISOString(), state: S }, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `기술사학습기록_${dayKey()}.json`; a.click(); $('recMenu').open = false; }
-  if (el.id === 'importBtn') { $('importFile').click(); $('recMenu').open = false; }
+  if (el.id === 'exportBtn') { $('recMenu').open = false; exportRecord(); }
+  if (el.id === 'importBtn' || el.id === 'replaceBtn') { importMode = el.id === 'replaceBtn' ? 'replace' : 'merge'; $('importFile').click(); $('recMenu').open = false; }
 });
+
+// ── 기록 보관: 내보내기(손글씨 포함 선택·공유 창), 불러와 합치기 ──
+let importMode = 'merge';
+const kb = n => n >= 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB';
+async function exportRecord() {
+  const withPen = $('withPen').checked;
+  let pen = null; if (withPen) { try { pen = await IDB.all(); } catch (_) { pen = null; } }
+  const text = JSON.stringify({ app: '수자원기술사 학습', at: new Date().toISOString(), state: S, ...(pen ? { pen } : {}) });
+  const name = `기술사학습기록_${dayKey()}${pen ? '_손글씨' : ''}.json`, blob = new Blob([text], { type: 'application/json' });
+  let shared = false;
+  try {   // 아이폰·아이패드: 공유 창(에어드롭·파일 앱)
+    const file = new File([blob], name, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && matchMedia('(pointer:coarse)').matches) { await navigator.share({ files: [file], title: name }); shared = true; }
+  } catch (err) { if (err && err.name === 'AbortError') return; }
+  if (!shared) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+  S.lastExport = new Date().toISOString(); save(); toast(`기록을 내보냈습니다 (${kb(blob.size)})`);
+}
+// 합치기 규칙: 문항 카드는 복습을 더 많이 한 쪽(같으면 다음 복습일이 늦은 쪽), 쓰기 기록·공부한 날은 양쪽 합침, 그 밖은 지금 기기 값 우선
+function mergeState(cur, inc) {
+  const out = { ...inc, ...cur, cards: { ...cur.cards }, drafts: { ...(inc.drafts || {}), ...(cur.drafts || {}) }, autoDay: { ...(inc.autoDay || {}), ...(cur.autoDay || {}) }, days: { ...cur.days } };
+  Object.entries(inc.cards || {}).forEach(([k, c]) => {
+    const m = out.cards[k];
+    if (!m || (c.reviews || 0) > (m.reviews || 0) || ((c.reviews || 0) === (m.reviews || 0) && new Date(c.next) > new Date(m.next))) out.cards[k] = c;
+  });
+  const seen = new Set(), att = [...(cur.attempts || []), ...(inc.attempts || [])].filter(x => { const id = `${x.key}|${x.at}`; if (seen.has(id)) return false; seen.add(id); return true; });
+  out.attempts = att.sort((x, y) => new Date(y.at) - new Date(x.at));
+  Object.entries(inc.days || {}).forEach(([k, d]) => {
+    const m = out.days[k]; if (!m) { out.days[k] = d; return; }
+    out.days[k] = { ...d, ...m, done: [...new Set([...(m.done || []), ...(d.done || [])])], q: m.q || d.q, recall: m.recall || d.recall };
+  });
+  return out;
+}
 $('importFile').addEventListener('change', async e => {
-  const f = e.target.files[0]; if (!f) return;
-  try { const p = JSON.parse(await f.text()), next = p.state || p; if (!next.cards || !Array.isArray(next.attempts)) throw 0; if (!confirm('현재 기록을 이 파일로 바꿀까요?')) return; S = { ...load(), ...next }; save(); show('today'); toast('기록을 가져왔습니다'); } catch { toast('학습 기록 파일이 아닙니다'); }
-  e.target.value = '';
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  let p; try { p = JSON.parse(await f.text()); } catch { toast('학습 기록 파일이 아닙니다'); return; }
+  const next = p.state || p; if (!next.cards || !Array.isArray(next.attempts)) { toast('학습 기록 파일이 아닙니다'); return; }
+  const before = { cards: Object.keys(S.cards).length, attempts: S.attempts.length };
+  if (importMode === 'replace') { if (!confirm('지금 기기의 기록을 이 파일로 통째로 바꿀까요? 지금 기록은 사라집니다.')) return; S = { ...load(), ...next }; }
+  else S = mergeState(S, { cards: {}, attempts: [], drafts: {}, days: {}, ...next });
+  save();
+  let penN = 0;
+  if (p.pen) { for (const [k, v] of Object.entries(p.pen)) { if (importMode === 'replace' || (await IDB.get(k)) === undefined) { await IDB.set(k, v); penN++; } } }
+  show('today');
+  toast(importMode === 'replace' ? '기록을 바꿨습니다' : `합쳤습니다: 문항 ${before.cards}→${Object.keys(S.cards).length}, 쓰기 ${before.attempts}→${S.attempts.length}${penN ? `, 손글씨 ${penN}건` : ''}`);
+});
+$('recMenu').addEventListener('toggle', async () => {
+  if (!$('recMenu').open) return;
+  try { const all = await IDB.all(), n = Object.keys(all).length; $('penSize').textContent = n ? `(${n}건, 약 ${kb(new Blob([JSON.stringify(all)]).size)})` : '(없음)'; } catch (_) { $('penSize').textContent = ''; }
 });
 
 setTopic(isAuto() ? autoTopic().i : Number(S.topic || 0));

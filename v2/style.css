@@ -32,6 +32,9 @@ a{color:var(--pen);text-underline-offset:3px}
 .menu[open] summary{border-color:var(--pen);color:var(--pen)}
 .menu .pop{position:absolute;right:0;top:calc(100% + 6px);z-index:30;background:var(--paper);border:1px solid var(--rule2);border-radius:4px;padding:8px;display:grid;gap:6px;min-width:220px;box-shadow:0 8px 24px rgba(27,34,43,.12)}
 .menu .pop p{margin:0 4px 4px;font-size:.8rem;color:var(--ink2)}
+.menu .chk{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 6px;font-size:.88rem;color:var(--ink)}
+.menu .chk input{width:20px;height:20px;accent-color:var(--pen)}
+.menu .chk span{color:var(--ink2);font-size:.8rem}
 
 /* 뼈대: 왼쪽 단계 목차 + 답안지 */
 .shell{display:grid;grid-template-columns:200px minmax(0,1fr);min-height:calc(100vh - var(--topH))}
@@ -55,6 +58,7 @@ h1{font-family:var(--serif);font-size:1.4rem;line-height:1.35;margin:0 0 6px;let
 h2{font-family:var(--serif);font-size:1.05rem;margin:30px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
 .sub{color:var(--ink2);font-size:.92rem;margin:0 0 18px}
 .note{color:var(--ink2);font-size:.86rem}
+.note.warnline{color:var(--warn);background:var(--warn-bg);border-left:3px solid var(--warn);padding:8px 10px;margin:8px 0}
 .panel{border-top:1px solid var(--rule);padding:16px 0 4px;margin:0 0 12px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .q{font-family:var(--serif);font-size:1.12rem;font-weight:700;line-height:1.55;margin:8px 0 12px;text-wrap:pretty}
