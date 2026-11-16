@@ -58,7 +58,7 @@ h1{font-family:var(--serif);font-size:1.4rem;line-height:1.35;margin:0 0 6px;let
 h2{font-family:var(--serif);font-size:1.05rem;margin:30px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
 .sub{color:var(--ink2);font-size:.92rem;margin:0 0 18px}
 .note{color:var(--ink2);font-size:.86rem}
-.note.warnline{color:var(--warn);background:var(--warn-bg);border-left:3px solid var(--warn);padding:8px 10px;margin:8px 0}
+.note.warnline{color:var(--warn);background:var(--warn-bg);border:1px solid #e3c38f;border-radius:4px;padding:8px 10px;margin:8px 0}
 .panel{border-top:1px solid var(--rule);padding:16px 0 4px;margin:0 0 12px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .q{font-family:var(--serif);font-size:1.12rem;font-weight:700;line-height:1.55;margin:8px 0 12px;text-wrap:pretty}
