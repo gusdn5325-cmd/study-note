@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=202611170810">
+<link rel="stylesheet" href="style.css?v=202611170834">
 </head>
 <body>
 <header class="top">
@@ -35,6 +35,8 @@
     <button class="step" data-step="review"><i>5</i>복습 예약</button>
     <hr>
     <button class="step" data-step="list"><i>≡</i>문항 목록</button>
+    <button class="step" data-step="due"><i>↻</i>복습 모아 보기<span class="cnt" id="dueCnt"></span></button>
+    <button class="step" data-step="cover"><i>▦</i>범위 현황</button>
   </nav>
 
   <main id="main">
@@ -45,13 +47,15 @@
     <section id="v-compare" class="view"></section>
     <section id="v-review" class="view"></section>
     <section id="v-list" class="view"></section>
+    <section id="v-due" class="view"></section>
+    <section id="v-cover" class="view"></section>
   </main>
 </div>
 <div id="toast" class="toast" role="status"></div>
 
-<script src="data.js?v=202611170810"></script>
-<script src="scoring.js?v=202611170810"></script>
-<script src="study.js?v=202611170810"></script>
+<script src="data.js?v=202611170834"></script>
+<script src="scoring.js?v=202611170834"></script>
+<script src="study.js?v=202611170834"></script>
 <script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 </body>
 </html>

@@ -84,7 +84,8 @@ function pickQuestion() {
   if (t.q && ANS.some(a => a.id === t.q)) return t.q;
   const due = ANS.filter(a => isDue(a.id)).sort((a, b) => new Date(S.cards[a.id].next) - new Date(S.cards[b.id].next));
   const fresh = ANS.filter(a => !S.cards[a.id]).sort((a, b) => ((a.status === '원문 확인' ? 0 : 1) - (b.status === '원문 확인' ? 0 : 1)) || (((b.source && b.source.h) || 0) - ((a.source && a.source.h) || 0)));
-  const pick = (due[0] || fresh[0] || ANS[0]).id;
+  const w = wantGyosi(), fit = x => !w || (w === 1 ? x.gyosi === 1 : x.gyosi !== 1);
+  const pick = (due.find(fit) || due[0] || fresh.find(fit) || fresh[0] || ANS[0]).id;
   t.q = pick; save(); return pick;
 }
 function markDone(step) { const t = todayState(); if (!t.done.includes(step)) { t.done.push(step); save(); } renderNav(); }
@@ -98,6 +99,7 @@ function renderToday() {
   $('v-today').innerHTML = `
     <h1>오늘 할 일</h1><p class="sub">${esc(SN.topic)}${examLabel()}${due ? ` · 복습 ${due}건` : ''}</p>
     ${backupNote()}
+    ${goalHtml()}
     ${isAuto() ? (() => { const p = autoTopic(), f = D.topics[TI].freq || {};
       const why = p.why === 'due' ? `복습할 문항이 ${p.n}건 쌓여 있어 이 주제를 먼저 골랐습니다.` : `이 주제는 출제 비중 ${Math.round(p.share * 100)}%(누적 ${f.tot}회, 최근 6회 ${f.rec}회)입니다. 지금까지 ${p.done}일 공부해 비중 대비 가장 덜 한 주제라서 골랐습니다.${p.weak > 1.05 ? ' 복습 평가가 낮아 더 자주 나옵니다.' : p.weak < 0.95 ? ' 잘 아는 주제라 덜 나옵니다.' : ''}${recentK() === 4 ? ' 시험 4주 전이라 최근 출제를 더 무겁게 봅니다.' : ''}`;
       return `<details class="why"><summary>왜 이 주제?</summary><p class="note">${why} 공부한 문항 ${seen}/${ANS.length}.</p></details>`; })() : `<p class="note">공부한 문항 ${seen}/${ANS.length}</p>`}
@@ -294,7 +296,7 @@ function renderReview() {
   const a = answerOf(pickQuestion()), c = S.cards[a.id];
   const fin = todayState().done.includes('review');
   $('v-review').innerHTML = `<h1>5단계 · 복습 예약</h1><p class="sub">이 문제를 다시 볼 날을 정합니다. 간격은 1·3·7·14·30일입니다.</p>
-    ${fin ? `<div class="donebox" role="status"><b>오늘 공부 끝</b><p class="note" style="margin:4px 0 0">${c ? `이 문제는 ${fmt(c.next)}에 다시 나옵니다. ` : ''}내일은 앱이 출제 비중과 복습 일정으로 새 주제를 골라 둡니다.</p></div>` : ''}
+    ${fin ? `<div class="donebox" role="status"><b>오늘 공부 끝</b><p class="note" style="margin:4px 0 0">${c ? `이 문제는 ${fmt(c.next)}에 다시 나옵니다. ` : ''}내일은 앱이 출제 비중과 복습 일정으로 새 주제를 골라 둡니다.</p>${goalLeftHtml()}</div>` : ''}
     <div class="panel"><p class="q">${esc(a.question)}</p><p class="note">${c ? `지금 ${LADDER[c.level]}일 간격 · 다음 복습 ${fmt(c.next)}` : '처음 공부한 문제입니다.'}</p>
     <div class="rate">${[['again', '다시', '내일'], ['hard', '어려움', '간격 유지'], ['good', '보통', '다음 간격'], ['easy', '쉬움', '한 칸 건너뛰기']].map(([v, t, s]) => `<button type="button" data-rate="${v}"><b>${t}</b><span>${s}</span></button>`).join('')}</div></div>
     <h2>복습 일정</h2><div class="panel">${schedule()}</div>`;
@@ -303,15 +305,102 @@ function schedule() {
   const rows = ANS.filter(a => S.cards[a.id]).sort((x, y) => new Date(S.cards[x.id].next) - new Date(S.cards[y.id].next));
   return rows.length ? rows.map(a => `<div class="list-item"><span class="badge ${isDue(a.id) ? 'due' : ''}">${fmt(S.cards[a.id].next)}</span><span>${esc(a.question)}</span><span class="note">${LADDER[S.cards[a.id].level]}일 간격</span></div>`).join('') : '<p class="note">아직 예약한 문제가 없습니다.</p>';
 }
-function rate(v) {
-  const a = answerOf(pickQuestion()), prev = S.cards[a.id];
+// 문항 하나의 복습 간격 갱신(오늘 문제·복습 모아 보기 공용). 되돌리기용 이전 값을 돌려준다
+function rateCard(id, v) {
+  const prev = S.cards[id];
   let level = prev ? prev.level : -1;
   level = v === 'again' ? 0 : v === 'hard' ? Math.max(0, level) : v === 'good' ? Math.min(LADDER.length - 1, level + 1) : Math.min(LADDER.length - 1, level + 2);
   const next = today(); next.setDate(next.getDate() + (v === 'again' ? 1 : LADDER[level]));
-  const tday = todayState(), prevDone = [...tday.done];
-  S.cards[a.id] = { level, next: next.toISOString(), reviews: (prev ? prev.reviews : 0) + 1 };
+  S.cards[id] = { level, next: next.toISOString(), reviews: (prev ? prev.reviews : 0) + 1, last: dayKey() };
+  return { prev, next };
+}
+function rate(v) {
+  const a = answerOf(pickQuestion()), tday = todayState(), prevDone = [...tday.done];
+  const { prev, next } = rateCard(a.id, v);
   markDone('review'); save(); renderReview();
   toast(`${fmt(next.toISOString())}에 다시 봅니다`, () => { if (prev) S.cards[a.id] = prev; else delete S.cards[a.id]; tday.done = prevDone; save(); renderNav(); renderReview(); });
+}
+
+// ── 하루 분량: 목표(1교시형·논술 수)와 '한 문제 더' ──
+const GOALS = { light: { n: '가볍게', g1: 1, g2: 0 }, normal: { n: '보통', g1: 2, g2: 1 }, heavy: { n: '많이', g1: 3, g2: 2 } };
+const ANS_BY_ID = new Map(D.topics.flatMap((t, ti) => t.answers.map(a => [a.id, { a, ti }])));
+const goal = () => GOALS[S.goal] || GOALS.normal;
+function todayDone() {   // 오늘 쓰기를 마친 문항 수(교시별)
+  const n = { g1: 0, g2: 0 };
+  S.attempts.filter(x => x.day === dayKey()).forEach(x => { const r = ANS_BY_ID.get(x.key); if (r) n[r.a.gyosi === 1 ? 'g1' : 'g2']++; });
+  return n;
+}
+function wantGyosi() {   // 남은 목표에 맞는 교시: 1(1교시형) / 2(논술) / 0(상관없음)
+  const g = goal(), d = todayDone();
+  if (d.g1 < g.g1 && d.g2 >= g.g2) return 1;
+  if (d.g2 < g.g2 && d.g1 >= g.g1) return 2;
+  return 0;
+}
+function topicsDoneToday() { const k = dayKey() + '|'; return new Set(Object.entries(S.days).filter(([key, v]) => key.startsWith(k) && v.done && v.done.length).map(([key]) => key.slice(k.length))); }
+function pickExtraTopic() {   // 오늘 아직 안 한 주제 중 출제 비중 대비 가장 덜 한 주제
+  const done = topicsDoneToday(), ws = D.topics.map((t, i) => weightOf(t, i)), sum = ws.reduce((a, b) => a + b, 0);
+  const days = D.topics.map((_, i) => studiedDays(i, '')), total = days.reduce((a, b) => a + b, 0) + 1;
+  let best = -1, gap = -Infinity;
+  D.topics.forEach((t, i) => { if (done.has(t.prefix)) return; const g = ws[i] / sum * total - days[i]; if (g > gap) { gap = g; best = i; } });
+  return best;
+}
+function oneMore() {
+  const i = pickExtraTopic(); if (i < 0) { toast('오늘 모든 주제를 공부했습니다'); return; }
+  S.extraPick = { day: dayKey(), i }; S.topicMode = 'auto'; setTopic(i); save(); $('topicSel').value = 'auto'; show('today'); toast(`다음 문제: ${SN.topic}`);
+}
+const currentAutoTopic = () => (S.extraPick && S.extraPick.day === dayKey() && S.extraPick.i < D.topics.length ? S.extraPick.i : autoTopic().i);
+function goalHtml() {
+  const g = goal(), d = todayDone(), cur = S.goal || 'normal';
+  return `<div class="goalbar"><span class="note">오늘 목표</span><div class="seg" role="group" aria-label="하루 분량">${Object.entries(GOALS).map(([k, v]) => `<button type="button" data-goal="${k}" class="${cur === k ? 'on' : ''}" aria-pressed="${cur === k}">${v.n}</button>`).join('')}</div>
+    <span class="note">1교시형 ${Math.min(d.g1, g.g1)}/${g.g1}${g.g2 ? ` · 논술 ${Math.min(d.g2, g.g2)}/${g.g2}` : ''}</span></div>`;
+}
+function goalLeftHtml() {
+  const g = goal(), d = todayDone(), left = Math.max(0, g.g1 - d.g1) + Math.max(0, g.g2 - d.g2);
+  return `<p class="note" style="margin:6px 0 0">오늘 목표 ${left ? `${left}문제 남음` : '달성'} · 1교시형 ${d.g1}/${g.g1}${g.g2 ? ` · 논술 ${d.g2}/${g.g2}` : ''}</p><button class="${left ? 'primary' : 'ghost'}" type="button" id="oneMore">한 문제 더</button>`;
+}
+
+// ── 복습 모아 보기: 모든 주제의 복습 예정 문항을 차례로 ──
+let DUEQ = null, DI = 0, DPH = 'q';
+const dueAllIds = () => [...ANS_BY_ID.keys()].filter(isDue).sort((x, y) => new Date(S.cards[x].next) - new Date(S.cards[y].next));
+const skeletonOf = a => a.answer.split('\n').filter(l => /^[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]\.\s/.test(l)).map(l => l.trim().replace(/^[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]\.\s*/, ''));
+const RATES = [['again', '다시', '내일'], ['hard', '어려움', '간격 유지'], ['good', '보통', '다음 간격'], ['easy', '쉬움', '한 칸 건너뛰기']];
+function renderDue() {
+  if (!DUEQ) { DUEQ = dueAllIds(); DI = 0; DPH = 'q'; }
+  const v = $('v-due');
+  if (!DUEQ.length) { v.innerHTML = `<h1>복습 모아 보기</h1><p class="sub">모든 주제의 복습 예정 문항을 한 번에 봅니다.</p><div class="donebox" role="status"><b>오늘 복습할 문항이 없습니다</b><p class="note" style="margin:4px 0 0">다음 복습 예정일이 되면 여기에 모입니다.</p></div>`; return; }
+  if (DI >= DUEQ.length) { v.innerHTML = `<h1>복습 모아 보기</h1><div class="donebox" role="status"><b>오늘 복습 끝 · ${DUEQ.length}건</b><p class="note" style="margin:4px 0 0">이제 '오늘 할 일'에서 새 문제를 공부하세요.</p></div><button class="primary" type="button" data-go="today">오늘 할 일로</button>`; return; }
+  const { a, ti } = ANS_BY_ID.get(DUEQ[DI]), sn = D.topics[ti].subnote, c = S.cards[a.id];
+  const kws = sn.keywords.filter(k => a.answer.includes(k));
+  v.innerHTML = `<h1>복습 모아 보기</h1><p class="sub">${DI + 1} / ${DUEQ.length}건 · 문항당 2~3분. 뼈대를 먼저 떠올린 뒤 확인합니다.</p>
+    <div class="panel"><div class="row"><span class="badge">${esc(sn.topic)}</span><span class="badge">${a.gyosi}교시 · ${a.max}점</span>${badge(a)}${c ? `<span class="badge due">${LADDER[c.level]}일 간격</span>` : ''}</div>
+    <p class="q">${esc(a.question)}</p>
+    ${DPH === 'q' ? `<p class="note">대제목(Ⅰ·Ⅱ·Ⅲ…)과 꼭 쓸 핵심어, 그림 1개를 머릿속이나 종이에 적어 본 뒤 누르세요.</p><button class="primary" type="button" id="dueShow">모범 뼈대 보기</button>`
+    : `<h2>모범 뼈대</h2><ol class="outline">${skeletonOf(a).map(l => `<li>${esc(l)}</li>`).join('')}</ol>
+      ${kws.length ? `<h2>핵심어</h2><div class="chips">${kws.map(k => `<span class="chip">${esc(k)}</span>`).join('')}</div>` : ''}
+      <details><summary>모범답안 전체</summary><pre class="ans">${esc(a.answer)}</pre></details>
+      <div class="rate">${RATES.map(([k, t, s2]) => `<button type="button" data-drate="${k}"><b>${t}</b><span>${s2}</span></button>`).join('')}</div>`}</div>`;
+}
+function dueRate(v) {
+  const id = DUEQ[DI], { prev, next } = rateCard(id, v); save();
+  const at = DI; DI++; DPH = 'q'; renderDue(); renderNav();
+  toast(`${fmt(next.toISOString())}에 다시 봅니다`, () => { if (prev) S.cards[id] = prev; else delete S.cards[id]; save(); DI = at; DPH = 'a'; renderDue(); renderNav(); });
+}
+
+// ── 범위 현황판: 등급별 수록·공부 현황과 최근 6회 '고를 수 있는 문항 수' ──
+function studiedTopicIds() { return new Set(D.topics.filter((t, i) => t.answers.some(a => S.cards[a.id]) || studiedDays(i, '') > 0).map(t => t.tid)); }
+function renderCover() {
+  const studied = studiedTopicIds(), app = new Set(D.topics.map(t => t.tid)), G = D.grades || [], R = D.recent || [];
+  const tiers = ['S', 'A', 'B', 'C'].map(k => { const g = G.filter(x => x.tier === k); return { k, n: g.length, app: g.filter(x => app.has(x.id)).length, st: g.filter(x => studied.has(x.id)).length, rec: g.reduce((a, x) => a + x.rec, 0) }; });
+  const rounds = [...new Set(R.map(r => r.h))].sort((a, b) => b - a);
+  const need = g => (g === 1 ? 10 : 4), tot = g => (g === 1 ? 13 : 6);
+  const row = (h, set) => [1, 2, 3, 4].map(g => { const n = R.filter(r => r.h === h && r.g === g && set.has(r.t)).length; return `<td class="${n < need(g) ? 'short' : 'enough'}">${n}/${tot(g)}${n < need(g) ? '<span class="sr"> 부족</span>' : ''}</td>`; }).join('');
+  const table = set => `<table class="covtab"><tr><th>회차</th><th>1교시</th><th>2교시</th><th>3교시</th><th>4교시</th></tr>${rounds.map(h => `<tr><td>${h}회</td>${row(h, set)}</tr>`).join('')}</table>`;
+  $('v-cover').innerHTML = `<h1>범위 현황</h1><p class="sub">시험장에서 1교시는 13문항 중 10개, 2·3·4교시는 6문항 중 4개를 골라 씁니다. 공부한 주제로 몇 문항을 고를 수 있었는지 봅니다.</p>
+    <h2>등급별 주제</h2><table><tr><th>등급</th><th>주제</th><th>답안 있음</th><th>공부함</th><th>최근 6회 출제</th></tr>
+      ${tiers.map(t => `<tr><td>${t.k}</td><td>${t.n}</td><td>${t.app}</td><td>${t.st}</td><td>${t.rec}문항</td></tr>`).join('')}</table>
+    <h2>최근 6회: 내가 공부한 주제로 고를 수 있던 문항</h2><p class="note">필요: 1교시 10, 2·3·4교시 각 4. 모자란 칸은 점선 테두리입니다.</p>${table(studied)}
+    <h2>참고: 앱에 답안이 있는 주제를 다 공부하면</h2>${table(app)}
+    <details class="why"><summary>아직 답안이 없는 주제(최근 출제 순)</summary><ol class="outline">${G.filter(x => !app.has(x.id)).sort((a, b) => b.rec - a.rec || b.tot - a.tot).map(x => `<li>${esc(x.tier)} · ${esc(x.name)} (누적 ${x.tot}, 최근 ${x.rec})</li>`).join('')}</ol></details>`;
 }
 
 // ── 문항 목록 ──
@@ -324,10 +413,11 @@ function renderList() {
 }
 
 // ── 화면 전환 ──
-const RENDER = { today: renderToday, read: renderRead, recall: renderRecall, write: renderWrite, compare: renderCompare, review: renderReview, list: renderList };
+const RENDER = { today: renderToday, read: renderRead, recall: renderRecall, write: renderWrite, compare: renderCompare, review: renderReview, list: renderList, due: renderDue, cover: renderCover };
 function show(step) {
   if (step !== 'write' && timer) { clearInterval(timer); timer = null; }
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === `v-${step}`));
+  if (step === 'due') DUEQ = null;
   RENDER[step](); renderNav(step); window.scrollTo(0, 0);
 }
 function renderNav(active) {
@@ -335,6 +425,7 @@ function renderNav(active) {
   const cur = active || document.querySelector('.view.on')?.id.slice(2);
   document.querySelectorAll('.step').forEach(b => { const on = b.dataset.step === cur; b.classList.toggle('on', on); b.toggleAttribute('aria-current', on); if (on) b.setAttribute('aria-current', 'step'); b.classList.toggle('done', t.done.includes(b.dataset.step)); if (on && b.scrollIntoView && innerWidth <= 900) b.scrollIntoView({ inline: 'center', block: 'nearest' }); });
   document.body.classList.toggle('focus', cur === 'write');
+  const dc = $('dueCnt'); if (dc) { const n = dueAllIds().length; dc.textContent = n ? String(n) : ''; }
 }
 
 document.addEventListener('click', e => {
@@ -345,6 +436,10 @@ document.addEventListener('click', e => {
   if (el.dataset.go) return show(el.dataset.go);
   if (el.dataset.recall) { const t = todayState(), prev = { recall: t.recall, done: [...t.done] }; t.recall = el.dataset.recall; markDone('recall'); save(); show(['some', 'none'].includes(el.dataset.recall) ? 'read' : 'write'); toast('떠올리기 평가를 기록했습니다', () => { t.recall = prev.recall; t.done = prev.done; save(); show('recall'); }); return; }
   if (el.dataset.rate) return rate(el.dataset.rate);
+  if (el.dataset.drate) return dueRate(el.dataset.drate);
+  if (el.id === 'dueShow') { DPH = 'a'; return renderDue(); }
+  if (el.id === 'oneMore') return oneMore();
+  if (el.dataset.goal) { S.goal = el.dataset.goal; save(); return show('today'); }
   if (el.dataset.kw !== undefined) return toggleKw(el);
   if (el.dataset.pick) { todayState().q = el.dataset.pick; const t = todayState(); t.done = t.done.filter(s => s === 'read' || s === 'recall'); save(); toast('오늘의 문제를 바꿨습니다'); return show('today'); }
   if (el.id === 'revealAll') { document.querySelectorAll('#recallBody .blank').forEach(b => b.classList.add('shown')); updateRecallCount(); }
@@ -428,12 +523,12 @@ $('recMenu').addEventListener('toggle', async () => {
   try { const all = await IDB.all(), n = Object.keys(all).length; $('penSize').textContent = n ? `(${n}건, 약 ${kb(new Blob([JSON.stringify(all)]).size)})` : '(없음)'; } catch (_) { $('penSize').textContent = ''; }
 });
 
-setTopic(isAuto() ? autoTopic().i : Number(S.topic || 0));
+setTopic(isAuto() ? currentAutoTopic() : Number(S.topic || 0));
 $('topicSel').innerHTML = `<option value="auto">오늘의 추천 (출제 비례) — ${esc(D.topics[autoTopic().i].subnote.topic)}</option>` +
   D.topics.map((t, i) => `<option value="${i}">${esc(t.subnote.topic)} (${t.answers.length}문항 · 출제 ${t.freq ? t.freq.tot : '-'}회)</option>`).join('');
 $('topicSel').value = isAuto() ? 'auto' : String(TI);
 $('topicSel').addEventListener('change', e => {
-  if (e.target.value === 'auto') { S.topicMode = 'auto'; setTopic(autoTopic().i); }
+  if (e.target.value === 'auto') { S.topicMode = 'auto'; setTopic(currentAutoTopic()); }
   else { S.topicMode = 'manual'; setTopic(Number(e.target.value)); S.topic = TI; }
   save(); show('today'); toast(`${SN.topic} 주제로 바꿨습니다`);
 });

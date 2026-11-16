@@ -209,3 +209,12 @@ textarea{width:100%;min-height:60vh;border:1px solid var(--rule2);border-radius:
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 details summary{min-height:44px;display:inline-flex;align-items:center;cursor:pointer;color:var(--pen);font-weight:600}
 details.why summary{min-height:44px}
+
+/* 하루 목표·복습 모아 보기·범위 현황(2026-11-17) */
+.goalbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:4px 0 14px}
+.goalbar .seg button{min-height:44px}
+.step .cnt{margin-left:auto;min-width:22px;padding:0 6px;border-radius:11px;background:var(--bad);color:#fff;font:700 .76rem/22px var(--ui,inherit);text-align:center}
+.step .cnt:empty{display:none}
+pre.ans{white-space:pre-wrap;font:inherit;font-size:.9rem;line-height:1.6;background:var(--desk);padding:12px;border-radius:4px;max-height:60vh;overflow:auto}
+.covtab td.enough{color:var(--ok);font-weight:700}
+.covtab td.short{color:var(--bad);font-weight:700;outline:1px dashed var(--bad);outline-offset:-3px;background:var(--bad-bg)}
