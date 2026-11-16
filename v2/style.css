@@ -218,3 +218,10 @@ details.why summary{min-height:44px}
 pre.ans{white-space:pre-wrap;font:inherit;font-size:.9rem;line-height:1.6;background:var(--desk);padding:12px;border-radius:4px;max-height:60vh;overflow:auto}
 .covtab td.enough{color:var(--ok);font-weight:700}
 .covtab td.short{color:var(--bad);font-weight:700;outline:1px dashed var(--bad);outline-offset:-3px;background:var(--bad-bg)}
+
+/* 요약 카드 */
+.cardbar{align-items:center;gap:10px;margin-bottom:8px}
+.cardbar .seg button{min-height:44px;min-width:48px}
+.cardtitle{font-family:var(--serif);font-size:1.3rem;margin-top:10px}
+#v-cards button[disabled]{opacity:.45;cursor:default}
+.chips .blank{min-height:40px;line-height:40px;padding:0 10px}

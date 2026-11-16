@@ -403,6 +403,28 @@ function renderCover() {
     <details class="why"><summary>아직 답안이 없는 주제(최근 출제 순)</summary><ol class="outline">${G.filter(x => !app.has(x.id)).sort((a, b) => b.rec - a.rec || b.tot - a.tot).map(x => `<li>${esc(x.tier)} · ${esc(x.name)} (누적 ${x.tot}, 최근 ${x.rec})</li>`).join('')}</ol></details>`;
 }
 
+// ── 요약 카드: 모든 주제의 서브노트를 한 장씩 빠르게 넘겨 보기(가리고 떠올리기 가능) ──
+let CI = 0, CHIDE = false;
+const cardList = () => D.topics.map((t, i) => ({ t, i })).filter(({ t }) => !S.cardTier || (t.freq && t.freq.tier) === S.cardTier || (S.cardTier === 'B' && t.partial));
+function renderCards() {
+  const L = cardList(); if (!L.length) { S.cardTier = ''; return renderCards(); }
+  CI = Math.max(0, Math.min(L.length - 1, CI));
+  const { t } = L[CI], sn = t.subnote, b = v => CHIDE ? `<button class="blank" type="button" aria-label="빈칸, 눌러서 보기"><span aria-hidden="true">${esc(v)}</span></button>` : esc(v);
+  const qs = (t.partial && t.allq.length ? t.allq : t.answers.map(a => ({ h: a.source && a.source.h, g: a.gyosi, n: a.source && a.source.n, q: a.question })));
+  $('v-cards').innerHTML = `<h1>요약 카드</h1><p class="sub">주제 하나를 한 장으로 봅니다. '가리기'를 켜면 핵심어·수치가 빈칸이 됩니다.</p>
+    <div class="row cardbar"><div class="seg" role="group" aria-label="등급">${[['', '전체'], ['S', 'S'], ['A', 'A'], ['B', 'B']].map(([k, n]) => `<button type="button" data-ctier="${k}" class="${(S.cardTier || '') === k ? 'on' : ''}" aria-pressed="${(S.cardTier || '') === k}">${n}</button>`).join('')}</div>
+      <button class="ghost${CHIDE ? ' on' : ''}" type="button" id="cardHide" aria-pressed="${CHIDE}">${CHIDE ? '가리기 켬' : '가리기'}</button><span class="note">${CI + 1} / ${L.length}</span></div>
+    <div class="panel"><div class="row"><span class="badge">${esc((t.freq && t.freq.tier) || '')}등급</span><span class="badge wrap">${esc(sn.count || '')}</span></div>
+      <h2 class="cardtitle">${esc(sn.topic)}</h2><p class="def">${esc(sn.definition)}</p>
+      <h2>뼈대</h2><ol class="outline">${sn.outline.map(o => `<li>${esc(o)}</li>`).join('')}</ol>
+      <h2>핵심어</h2><div class="chips">${sn.keywords.map(k => CHIDE ? b(k) : `<span class="chip">${esc(k)}</span>`).join('')}</div>
+      <h2>수치·조항</h2><table><tr><th>내용</th><th>수치</th><th>근거</th></tr>${sn.facts.map(f => `<tr><td>${esc(f.item)}</td><td>${b(f.value)}</td><td>${esc(f.basis)}</td></tr>`).join('')}</table>
+      <h2>그림</h2><pre class="fig">${esc(sn.figure)}</pre>
+      <h2>기술사 견해</h2><ol class="outline">${sn.opinions.map(o => `<li>${esc(o)}</li>`).join('')}</ol>
+      <details class="why"><summary>기출 문항 ${qs.length}개</summary><ol class="outline">${qs.map(q => `<li>${q.h ? `${q.h}회 ${q.g}교시 · ` : ''}${esc(q.q)}</li>`).join('')}</ol></details></div>
+    <div class="row"><button class="ghost" type="button" id="cardPrev" ${CI ? '' : 'disabled'}>이전</button><button class="primary" type="button" id="cardNext" ${CI < L.length - 1 ? '' : 'disabled'}>다음</button><button class="ghost" type="button" id="cardStudy">이 주제 공부하기</button></div>`;
+}
+
 // ── 문항 목록 ──
 function renderList() {
   const cur = pickQuestion();
@@ -413,7 +435,7 @@ function renderList() {
 }
 
 // ── 화면 전환 ──
-const RENDER = { today: renderToday, read: renderRead, recall: renderRecall, write: renderWrite, compare: renderCompare, review: renderReview, list: renderList, due: renderDue, cover: renderCover };
+const RENDER = { today: renderToday, read: renderRead, recall: renderRecall, write: renderWrite, compare: renderCompare, review: renderReview, list: renderList, due: renderDue, cover: renderCover, cards: renderCards };
 function show(step) {
   if (step !== 'write' && timer) { clearInterval(timer); timer = null; }
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === `v-${step}`));
@@ -439,6 +461,10 @@ document.addEventListener('click', e => {
   if (el.dataset.drate) return dueRate(el.dataset.drate);
   if (el.id === 'dueShow') { DPH = 'a'; return renderDue(); }
   if (el.id === 'oneMore') return oneMore();
+  if (el.dataset.ctier !== undefined) { S.cardTier = el.dataset.ctier; CI = 0; save(); return renderCards(); }
+  if (el.id === 'cardHide') { CHIDE = !CHIDE; return renderCards(); }
+  if (el.id === 'cardPrev' || el.id === 'cardNext') { CI += el.id === 'cardNext' ? 1 : -1; renderCards(); window.scrollTo(0, 0); return; }
+  if (el.id === 'cardStudy') { const { i } = cardList()[CI]; S.topicMode = 'manual'; setTopic(i); S.topic = TI; save(); $('topicSel').value = String(TI); return show('today'); }
   if (el.dataset.goal) { S.goal = el.dataset.goal; save(); return show('today'); }
   if (el.dataset.kw !== undefined) return toggleKw(el);
   if (el.dataset.pick) { todayState().q = el.dataset.pick; const t = todayState(); t.done = t.done.filter(s => s === 'read' || s === 'recall'); save(); toast('오늘의 문제를 바꿨습니다'); return show('today'); }
