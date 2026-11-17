@@ -235,3 +235,10 @@ pre.ans{white-space:pre-wrap;font:inherit;font-size:.9rem;line-height:1.6;backgr
 .cmpgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
 .meter.big{height:10px;margin:4px 0 12px}
 .chips button.chip{min-height:40px;cursor:pointer}
+
+/* 손으로 그릴 그림 */
+.figbox{margin:10px 0 16px;padding:10px 12px;border:1px solid var(--rule);border-radius:4px;background:var(--paper)}
+.figbox .svgbox svg{width:100%;max-width:460px;height:auto;display:block;color:var(--ink)}
+.figbox figcaption{font-size:.9rem;margin:6px 0 2px}
+.sheet .trace{position:absolute;left:6%;top:8%;width:60%;opacity:.22;pointer-events:none;color:var(--ink)}
+.sheet .trace svg{width:100%;height:auto}

@@ -139,9 +139,14 @@ function subnoteHtml(hide) {
     <h2>⑦ 문제 유형별 강조할 곳</h2><table><tr><th>유형</th><th>강조</th></tr>${SN.types.map(t => `<tr><td>${esc(t.type)}</td><td>${esc(t.focus)}</td></tr>`).join('')}</table>
     <h2>⑧ 근거</h2><ul class="note">${SN.sources.map(s => `<li>${esc(s)}</li>`).join('')}</ul>`}`;
 }
+// ── 그림: 손으로 1분 안에 그리는 대표 그림(그리는 순서 포함) ──
+const FIGS = D.figures || [];
+const figsOfTopic = () => FIGS.filter(f => f.topic === D.topics[TI].prefix);
+const figsOfAnswer = id => FIGS.filter(f => f.answers.includes(id));
+const figHtml = f => `<figure class="figbox"><div class="svgbox" aria-hidden="true">${f.svg}</div><figcaption><b>${esc(f.title)}</b> · 그리는 순서</figcaption><ol class="outline">${f.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol></figure>`;
 function renderRead() {
   $('v-read').innerHTML = `<h1>1단계 · 서브노트 읽기</h1><p class="sub">${esc(SN.topic)} · <span class="badge ok">${esc(SN.status)}</span> · 목차와 숫자를 소리 내어 한 번 읽습니다.</p>
-    <div class="panel">${subnoteHtml(false)}</div><button class="primary" data-done="read" data-go="recall">다 읽었습니다 → 2단계</button>`;
+    <div class="panel">${subnoteHtml(false)}</div>${figsOfTopic().length ? `<h2>손으로 그릴 대표 그림</h2>${figsOfTopic().map(figHtml).join('')}` : ''}<button class="primary" data-done="read" data-go="recall">다 읽었습니다 → 2단계</button>`;
 }
 
 // ── 2. 가리고 떠올리기 ──
@@ -165,7 +170,7 @@ function renderWrite() {
       ${pen ? '' : `<div class="meter" aria-hidden="true"><i id="lenBar" style="width:0"></i></div><span class="note" id="lenText">0 / ${target}자</span>`}</div><p class="q">${esc(a.question)}</p>
     <div class="modebar"><div class="seg"><button type="button" data-mode="text" class="${pen ? '' : 'on'}">글자 입력</button><button type="button" data-mode="pen" class="${pen ? 'on' : ''}">펜 손글씨</button></div>
       <span class="note">${pen ? '펜으로 씁니다. 손가락은 화면 넘기기.' : '애플펜슬로 쓰면 글자로 바뀝니다.'}</span></div>
-    ${pen ? `<div class="pentools"><button class="ghost on" type="button" data-tool="pen">펜</button><button class="ghost" type="button" data-tool="eraser">지우개</button><button class="ghost" type="button" id="penUndo">되돌리기</button><button class="ghost" type="button" id="penAddPage">쪽 추가</button><button class="ghost" type="button" id="penClear">이 쪽 지우기</button><label><input type="checkbox" id="fingerDraw"> 손가락으로도 쓰기</label></div></div><div class="pages" id="pages"></div>`
+    ${pen ? `<div class="pentools"><button class="ghost on" type="button" data-tool="pen">펜</button><button class="ghost" type="button" data-tool="eraser">지우개</button><button class="ghost" type="button" id="penUndo">되돌리기</button><button class="ghost" type="button" id="penAddPage">쪽 추가</button><button class="ghost" type="button" id="penClear">이 쪽 지우기</button>${(figsOfAnswer(a.id)[0] || figsOfTopic()[0]) ? '<button class="ghost" type="button" id="penTrace">밑그림</button>' : ''}<label><input type="checkbox" id="fingerDraw"> 손가락으로도 쓰기</label></div></div><div class="pages" id="pages"></div>`
       : `</div><textarea id="answer" aria-label="답안" placeholder="Ⅰ. 개요 → Ⅱ. 본론(번호체계) → 표·모식도 → 근거 조항 → 실무 의견">${esc(draft)}</textarea>`}
     <div class="row" style="margin-top:10px"><button class="ghost" id="saveDraft" type="button">임시저장</button><button class="primary" id="submitAnswer" type="button">작성 완료 → 4단계 비교</button></div>`;
   remain = minutes(a) * 60; spent = 0; clearInterval(timer); timer = null;
@@ -273,7 +278,7 @@ function renderCompare() {
       ${r.notices.length ? `<p>명칭 확인: ${esc(r.notices.join(' · '))}</p>` : ''}</div>
     <h2>핵심어 (실선 = 썼음, 점선 = 빠짐)</h2><div class="chips">${ks.map(k => `<span class="chip ${termHit(k, an) ? 'hit' : 'miss'}"><span class="sr">${termHit(k, an) ? '썼음: ' : '빠짐: '}</span>${esc(k)}</span>`).join('')}</div>
     <h2>나란히 보기</h2><div class="two"><div class="panel"><b>내 답안</b><pre>${esc(last.text)}</pre></div><div class="panel"><b>모범답안</b> ${badge(a)}<pre>${esc(a.answer)}</pre><p class="note">근거: ${esc(a.basis)}</p></div></div>
-    ${memoHtml(a)}<button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
+    ${figsOfAnswer(a.id).map(figHtml).join('')}${memoHtml(a)}<button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
 }
 
 function renderComparePen(a, last) {
@@ -282,7 +287,7 @@ function renderComparePen(a, last) {
     <div class="result"><div class="row"><span class="score" id="penScore">${ck.length} / ${ks.length}</span><span>핵심어 체크 · ${Math.round(last.secs / 60)}분 사용</span></div></div>
     <h2>핵심어 (내가 쓴 것을 누르면 실선으로 바뀜)</h2><div class="chips">${ks.map(k => `<button type="button" class="chip tap ${ck.includes(k) ? 'hit' : 'miss'}" aria-pressed="${ck.includes(k)}" data-kw="${esc(k)}">${esc(k)}</button>`).join('')}</div>
     <h2>나란히 보기</h2><div class="two"><div class="panel"><b>내 답안</b><div class="penimgs" id="penImgs"><p class="note">불러오는 중…</p></div></div><div class="panel"><b>모범답안</b> ${badge(a)}<pre>${esc(a.answer)}</pre><p class="note">근거: ${esc(a.basis)}</p></div></div>
-    ${memoHtml(a)}<button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
+    ${figsOfAnswer(a.id).map(figHtml).join('')}${memoHtml(a)}<button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
   IDB.get('att|' + a.id + '|' + last.day).then(imgs => { const el = $('penImgs'); if (el) el.innerHTML = imgs && imgs.length ? imgs.map(u => `<img alt="손글씨 답안" src="${u}">`).join('') : '<p class="note">이미지를 찾지 못했습니다.</p>'; });
 }
 function toggleKw(el) {
@@ -612,6 +617,7 @@ document.addEventListener('click', e => {
   if (el.id === 'penUndo') return PEN.undo();
   if (el.id === 'penAddPage') return PEN.addPage();
   if (el.id === 'penClear') return PEN.clearPage();
+  if (el.id === 'penTrace') { const sh = document.querySelector('#pages .sheet'); if (!sh) return; const old = sh.querySelector('.trace'); if (old) { old.remove(); el.classList.remove('on'); return; } const f = figsOfAnswer(pickQuestion())[0] || figsOfTopic()[0]; sh.insertAdjacentHTML('afterbegin', `<div class="trace" aria-hidden="true">${f.svg}</div>`); el.classList.add('on'); toast('밑그림을 따라 그린 뒤, 다시 눌러 끄고 혼자 그려 보세요'); return; }
   if (el.id === 'saveDraft') {
     if (S.writeMode === 'pen') { IDB.set(PEN.key, PEN.pages); toast('손글씨를 임시저장했습니다'); return; }
     S.drafts[pickQuestion()] = $('answer').value; save(); toast('임시저장했습니다');
