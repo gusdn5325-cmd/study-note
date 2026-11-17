@@ -257,6 +257,8 @@ const PEN = {
 function tick() { remain--; spent++; const m = Math.floor(Math.abs(remain) / 60), s = String(Math.abs(remain) % 60).padStart(2, '0'); const el = $('timer'); if (!el) return; el.textContent = `${remain < 0 ? '+' : ''}${m}:${s}`; el.classList.toggle('over', remain < 0); }
 
 // ── 4. 비교 ──
+// 학습 메모(답안 작성 요령): 답안 본문과 분리해 비교 화면 아래에 보인다
+const memoHtml = a => (a.memo && a.memo.length ? `<details class="why"><summary>학습 메모(작성 요령)</summary><ul class="note">${a.memo.map(m => `<li>${esc(m)}</li>`).join('')}</ul></details>` : '');
 function renderCompare() {
   const a = answerOf(pickQuestion()), last = S.attempts.find(x => x.key === a.id && x.day === dayKey());
   if (!last) { $('v-compare').innerHTML = `<h1>4단계 · 모범답안과 비교</h1><div class="panel">3단계에서 답안을 먼저 써 주세요.<br><br><button class="primary" data-go="write">3단계로</button></div>`; return; }
@@ -271,7 +273,7 @@ function renderCompare() {
       ${r.notices.length ? `<p>명칭 확인: ${esc(r.notices.join(' · '))}</p>` : ''}</div>
     <h2>핵심어 (실선 = 썼음, 점선 = 빠짐)</h2><div class="chips">${ks.map(k => `<span class="chip ${termHit(k, an) ? 'hit' : 'miss'}"><span class="sr">${termHit(k, an) ? '썼음: ' : '빠짐: '}</span>${esc(k)}</span>`).join('')}</div>
     <h2>나란히 보기</h2><div class="two"><div class="panel"><b>내 답안</b><pre>${esc(last.text)}</pre></div><div class="panel"><b>모범답안</b> ${badge(a)}<pre>${esc(a.answer)}</pre><p class="note">근거: ${esc(a.basis)}</p></div></div>
-    <button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
+    ${memoHtml(a)}<button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
 }
 
 function renderComparePen(a, last) {
@@ -280,7 +282,7 @@ function renderComparePen(a, last) {
     <div class="result"><div class="row"><span class="score" id="penScore">${ck.length} / ${ks.length}</span><span>핵심어 체크 · ${Math.round(last.secs / 60)}분 사용</span></div></div>
     <h2>핵심어 (내가 쓴 것을 누르면 실선으로 바뀜)</h2><div class="chips">${ks.map(k => `<button type="button" class="chip tap ${ck.includes(k) ? 'hit' : 'miss'}" aria-pressed="${ck.includes(k)}" data-kw="${esc(k)}">${esc(k)}</button>`).join('')}</div>
     <h2>나란히 보기</h2><div class="two"><div class="panel"><b>내 답안</b><div class="penimgs" id="penImgs"><p class="note">불러오는 중…</p></div></div><div class="panel"><b>모범답안</b> ${badge(a)}<pre>${esc(a.answer)}</pre><p class="note">근거: ${esc(a.basis)}</p></div></div>
-    <button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
+    ${memoHtml(a)}<button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
   IDB.get('att|' + a.id + '|' + last.day).then(imgs => { const el = $('penImgs'); if (el) el.innerHTML = imgs && imgs.length ? imgs.map(u => `<img alt="손글씨 답안" src="${u}">`).join('') : '<p class="note">이미지를 찾지 못했습니다.</p>'; });
 }
 function toggleKw(el) {
