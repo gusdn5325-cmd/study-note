@@ -242,3 +242,15 @@ pre.ans{white-space:pre-wrap;font:inherit;font-size:.9rem;line-height:1.6;backgr
 .figbox figcaption{font-size:.9rem;margin:6px 0 2px}
 .sheet .trace{position:absolute;left:6%;top:8%;width:60%;opacity:.22;pointer-events:none;color:var(--ink)}
 .sheet .trace svg{width:100%;height:auto}
+
+/* 서브노트 흐름 상자 */
+.flow{margin:8px 0 12px;padding:10px;border:1px solid var(--rule);border-radius:4px;background:var(--paper)}
+.flowrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px 2px}
+.flowbox{display:inline-block;padding:5px 9px;border:1px solid var(--ink);border-radius:3px;background:var(--paper);font-size:.88rem;line-height:1.35;max-width:100%}
+.flowarr{padding:0 3px;color:var(--ink2);font-weight:700}
+.flowdown{text-align:left;padding:2px 0 2px 18px;color:var(--ink2);font-weight:700;line-height:1.1}
+.flownotes{margin:6px 0 12px;padding-left:1.2em;font-size:.9rem}
+.flownotes li{margin:2px 0}
+.flowrow.par{gap:6px}
+.flowrow.par .flowbox{border-style:dashed}
+.flowrow.par::before{content:'나란히';font-size:.72rem;color:var(--ink2);margin-right:2px}

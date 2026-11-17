@@ -116,6 +116,17 @@ function renderToday() {
 function nextStep() { const t = todayState(); return STEPS.find(s => !t.done.includes(s)) || 'review'; }
 function badge(a) { return a.status === '원문 확인' ? '<span class="badge ok">원문 확인</span>' : `<span class="badge draft">${esc(a.status)}</span>`; }
 
+// ── 서브노트 그림: SVG 그림 + 흐름 상자(글자 그림은 글꼴에 따라 깨져서 쓰지 않음) ──
+function diagHtml(sn) {
+  const d = sn.diag;
+  if (!d) return `<pre class="fig">${esc(sn.figure || '')}</pre>`;
+  const svgs = (d.svg || []).map(id => (D.figures || []).find(f => f.id === id)).filter(Boolean)
+    .map(f => `<figure class="figbox"><div class="svgbox" role="img" aria-label="${esc(f.title)}">${f.svg}</div><figcaption><b>${esc(f.title)}</b></figcaption>${(f.steps || []).length ? `<details><summary>그리는 순서</summary><ol class="outline">${f.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol></details>` : ''}</figure>`).join('');
+  const rows = (d.rows || []).map(r => r.par ? `<div class="flowrow par">${r.par.map(x => `<span class="flowbox">${esc(x)}</span>`).join('')}</div>` : `<div class="flowrow">${r.map(x => `<span class="flowbox">${esc(x)}</span>`).join('<span class="flowarr" aria-hidden="true">→</span>')}</div>`)
+    .join('<div class="flowdown" aria-hidden="true">↓</div>');
+  const notes = (d.notes || []).length ? `<ul class="flownotes">${d.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : '';
+  return `${svgs}${rows ? `<div class="flow">${rows}</div>` : ''}${notes}`;
+}
 // ── 1. 서브노트 읽기 ──
 function subnoteHtml(hide) {
   const keys = [...SN.keywords].sort((a, b) => b.length - a.length);
@@ -133,7 +144,7 @@ function subnoteHtml(hide) {
     <h2>③ 핵심어</h2><div class="chips">${SN.keywords.map(k => hide ? `<button class="blank" type="button" aria-label="빈칸, 눌러서 보기"><span aria-hidden="true">${esc(k)}</span></button>` : `<span class="chip">${esc(k)}</span>`).join('')}</div>
     <h2>④ 수치·조항</h2><table><tr><th>내용</th><th>수치</th><th>근거</th></tr>${SN.facts.map(f => `<tr><td>${esc(f.item)}</td><td>${cell(f.value)}</td><td>${cell(f.basis)}</td></tr>`).join('')}</table>
     ${SN.lists.map(l => `<h2>${esc(l.title)}</h2><ol class="outline">${l.items.map(i => `<li>${cell(i)}</li>`).join('')}</ol>`).join('')}
-    <h2>⑤ 그림: 수립 절차 흐름도</h2>${hide ? '<p class="note">흐름도는 빈 종이에 직접 그려 본 뒤 아래 버튼으로 확인합니다.</p><details><summary>흐름도 보기</summary>' : ''}<pre class="fig">${esc(SN.figure)}</pre>${hide ? '</details>' : ''}
+    <h2>⑤ 그림: ${esc((SN.diag && SN.diag.title) || '흐름도')}</h2>${hide ? '<p class="note">그림은 빈 종이에 직접 그려 본 뒤 아래 버튼으로 확인합니다.</p><details><summary>그림 보기</summary>' : ''}${diagHtml(SN)}${hide ? '</details>' : ''}
     <h2>⑥ 실무 의견</h2><ol class="outline">${SN.opinions.map(o => `<li>${blankify(o)}</li>`).join('')}</ol>
     ${hide ? '' : `<h2>문제점과 개선</h2><table><tr><th>분야</th><th>문제점</th><th>개선</th></tr>${SN.problems.map(p => `<tr><td>${esc(p.field)}</td><td>${esc(p.problem)}</td><td>${esc(p.fix)}</td></tr>`).join('')}</table>
     <h2>⑦ 문제 유형별 강조할 곳</h2><table><tr><th>유형</th><th>강조</th></tr>${SN.types.map(t => `<tr><td>${esc(t.type)}</td><td>${esc(t.focus)}</td></tr>`).join('')}</table>
@@ -142,11 +153,12 @@ function subnoteHtml(hide) {
 // ── 그림: 손으로 1분 안에 그리는 대표 그림(그리는 순서 포함) ──
 const FIGS = D.figures || [];
 const figsOfTopic = () => FIGS.filter(f => f.topic === D.topics[TI].prefix);
+const figsExtra = () => figsOfTopic().filter(f => !((SN.diag && SN.diag.svg) || []).includes(f.id));   // 서브노트 ⑤에 이미 나온 그림은 빼고
 const figsOfAnswer = id => FIGS.filter(f => f.answers.includes(id));
 const figHtml = f => `<figure class="figbox"><div class="svgbox" aria-hidden="true">${f.svg}</div><figcaption><b>${esc(f.title)}</b> · 그리는 순서</figcaption><ol class="outline">${f.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol></figure>`;
 function renderRead() {
   $('v-read').innerHTML = `<h1>1단계 · 서브노트 읽기</h1><p class="sub">${esc(SN.topic)} · <span class="badge ok">${esc(SN.status)}</span> · 목차와 숫자를 소리 내어 한 번 읽습니다.</p>
-    <div class="panel">${subnoteHtml(false)}</div>${figsOfTopic().length ? `<h2>손으로 그릴 대표 그림</h2>${figsOfTopic().map(figHtml).join('')}` : ''}<button class="primary" data-done="read" data-go="recall">다 읽었습니다 → 2단계</button>`;
+    <div class="panel">${subnoteHtml(false)}</div>${figsExtra().length ? `<h2>손으로 그릴 대표 그림</h2>${figsExtra().map(figHtml).join('')}` : ''}<button class="primary" data-done="read" data-go="recall">다 읽었습니다 → 2단계</button>`;
 }
 
 // ── 2. 가리고 떠올리기 ──
@@ -426,7 +438,7 @@ function renderCards() {
       <h2>뼈대</h2><ol class="outline">${sn.outline.map(o => `<li>${esc(o)}</li>`).join('')}</ol>
       <h2>핵심어</h2><div class="chips">${sn.keywords.map(k => CHIDE ? b(k) : `<span class="chip">${esc(k)}</span>`).join('')}</div>
       <h2>수치·조항</h2><table><tr><th>내용</th><th>수치</th><th>근거</th></tr>${sn.facts.map(f => `<tr><td>${esc(f.item)}</td><td>${b(f.value)}</td><td>${esc(f.basis)}</td></tr>`).join('')}</table>
-      <h2>그림</h2><pre class="fig">${esc(sn.figure)}</pre>
+      <h2>그림: ${esc((sn.diag && sn.diag.title) || '')}</h2>${diagHtml(sn)}
       <h2>기술사 견해</h2><ol class="outline">${sn.opinions.map(o => `<li>${esc(o)}</li>`).join('')}</ol>
       <details class="why"><summary>기출 문항 ${qs.length}개</summary><ol class="outline">${qs.map(q => `<li>${q.h ? `${q.h}회 ${q.g}교시 · ` : ''}${esc(q.q)}</li>`).join('')}</ol></details></div>
     <div class="row"><button class="ghost" type="button" id="cardPrev" ${CI ? '' : 'disabled'}>이전</button><button class="primary" type="button" id="cardNext" ${CI < L.length - 1 ? '' : 'disabled'}>다음</button><button class="ghost" type="button" id="cardStudy">이 주제 공부하기</button></div>`;
