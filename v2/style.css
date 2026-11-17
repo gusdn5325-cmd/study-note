@@ -225,3 +225,13 @@ pre.ans{white-space:pre-wrap;font:inherit;font-size:.9rem;line-height:1.6;backgr
 .cardtitle{font-family:var(--serif);font-size:1.3rem;margin-top:10px}
 #v-cards button[disabled]{opacity:.45;cursor:default}
 .chips .blank{min-height:40px;line-height:40px;padding:0 10px}
+
+/* 모의고사·뼈대 잡기·주간 계획 */
+.mkq{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--rule);min-height:44px}
+.mkq input{width:22px;height:22px;margin-top:2px;flex:0 0 22px;accent-color:var(--pen)}
+#v-mock select,#v-skel select{min-height:44px}
+#v-mock button[disabled]{opacity:.45}
+#skText{min-height:220px}
+.cmpgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.meter.big{height:10px;margin:4px 0 12px}
+.chips button.chip{min-height:40px;cursor:pointer}

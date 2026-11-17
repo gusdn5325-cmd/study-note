@@ -21,7 +21,7 @@ const fmt = iso => new Date(iso).toLocaleDateString('ko-KR', { month: 'short', d
 
 function load() { try { return { cards: {}, attempts: [], drafts: {}, days: {}, ...(JSON.parse(localStorage.getItem(KEY)) || {}) }; } catch { return { cards: {}, attempts: [], drafts: {}, days: {} }; } }
 let S = load();
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch { toast('브라우저 저장소를 쓸 수 없습니다. 기록 내보내기를 이용하세요'); } }
+function save() { try { if (typeof MK !== 'undefined') S.mockNow = MK; localStorage.setItem(KEY, JSON.stringify(S)); } catch { toast('브라우저 저장소를 쓸 수 없습니다. 기록 내보내기를 이용하세요'); } }
 let toastT = null;
 function toast(t, undo) {
   const el = $('toast'); el.innerHTML = `<span>${esc(t)}</span>${undo ? '<button type="button" id="toastUndo">되돌리기</button>' : ''}`;
@@ -425,6 +425,127 @@ function renderCards() {
     <div class="row"><button class="ghost" type="button" id="cardPrev" ${CI ? '' : 'disabled'}>이전</button><button class="primary" type="button" id="cardNext" ${CI < L.length - 1 ? '' : 'disabled'}>다음</button><button class="ghost" type="button" id="cardStudy">이 주제 공부하기</button></div>`;
 }
 
+// ── 모의고사: 실제 형식(1교시 13 중 10, 2~4교시 6 중 4, 교시당 100분) ──
+const EX = D.exams || [];
+const NEED = g => (g === 1 ? 10 : 4), TOT = g => (g === 1 ? 13 : 6);
+const exRounds = () => [...new Set(EX.map(e => e.h))].sort((a, b) => b - a);
+const ansOfEx = e => (e.a ? ANS_BY_ID.get(e.a) : null);
+let MK = S.mockNow || null, mkTimer = null, mkLeft = 0;
+function mockStart(kind, g, h) {
+  let qs;
+  if (kind === 'round') qs = EX.filter(e => e.h === h && e.g === g).sort((a, b) => a.n - b.n);
+  else {   // 최근 6회 같은 교시 문항을 섞어 한 회차 분량으로
+    const rs = exRounds().slice(0, 6), pool = EX.filter(e => rs.includes(e.h) && e.g === g);
+    qs = pool.map(e => [Math.random(), e]).sort((a, b) => a[0] - b[0]).slice(0, TOT(g)).map(x => x[1]);
+  }
+  MK = { kind, g, h: kind === 'round' ? h : null, qs: qs.map(e => `${e.h}-${e.g}-${e.n}`), pick: [], phase: 'select', checks: {}, started: null };
+  save(); renderMock();
+}
+const exByKey = k => EX.find(e => `${e.h}-${e.g}-${e.n}` === k);
+function mockTick() { mkLeft--; const el = $('mkTimer'); if (el) { const m = Math.floor(Math.abs(mkLeft) / 60), s = String(Math.abs(mkLeft) % 60).padStart(2, '0'); el.textContent = `${mkLeft < 0 ? '+' : ''}${m}:${s}`; el.classList.toggle('over', mkLeft < 0); } }
+function renderMock() {
+  const v = $('v-mock'); clearInterval(mkTimer); mkTimer = null;
+  if (!MK) {
+    const hist = (S.mocks || []).slice(0, 5);
+    v.innerHTML = `<h1>모의고사</h1><p class="sub">실제 시험처럼 1교시는 13문항 중 10개, 2·3·4교시는 6문항 중 4개를 골라 100분 동안 씁니다. 답은 종이에 쓰는 것을 권합니다.</p>
+      <div class="panel"><h2>기출 회차 그대로</h2><div class="row"><select id="mkRound" aria-label="회차">${exRounds().map(h => `<option value="${h}">${h}회</option>`).join('')}</select>
+        <select id="mkG1" aria-label="교시">${[1, 2, 3, 4].map(g => `<option value="${g}">${g}교시</option>`).join('')}</select><button class="primary" type="button" id="mkRoundGo">시작</button></div>
+      <h2>최근 6회 분포로 섞어 만들기</h2><div class="row"><select id="mkG2" aria-label="교시">${[1, 2, 3, 4].map(g => `<option value="${g}">${g}교시</option>`).join('')}</select><button class="ghost" type="button" id="mkMixGo">만들기</button></div></div>
+      ${hist.length ? `<h2>지난 모의고사</h2><table><tr><th>날짜</th><th>구성</th><th>점수</th></tr>${hist.map(m => `<tr><td>${esc(m.day)}</td><td>${esc(m.label)}</td><td>${m.score}점</td></tr>`).join('')}</table>` : ''}`;
+    return;
+  }
+  const label = MK.kind === 'round' ? `${MK.h}회 ${MK.g}교시` : `섞은 ${MK.g}교시`;
+  if (MK.phase === 'select') {
+    v.innerHTML = `<h1>모의고사 · ${esc(label)}</h1><p class="sub">문제를 고르세요(${NEED(MK.g)}개). 실제 시험처럼 2분 안에 고르는 연습을 합니다.</p>
+      <div class="panel">${MK.qs.map((k, i) => { const e = exByKey(k), on = MK.pick.includes(k); return `<label class="mkq"><input type="checkbox" data-mkpick="${k}" ${on ? 'checked' : ''}> <span><b>${i + 1}.</b> ${esc(e.q)} ${e.a ? '' : '<span class="badge draft">답안 없음</span>'}</span></label>`; }).join('')}</div>
+      <div class="row"><span class="note" id="mkCnt">${MK.pick.length} / ${NEED(MK.g)} 선택</span><button class="primary" type="button" id="mkBegin" ${MK.pick.length === NEED(MK.g) ? '' : 'disabled'}>100분 시작</button><button class="ghost" type="button" id="mkPrint">문제지·답안지 인쇄</button><button class="ghost" type="button" id="mkQuit">그만두기</button></div>`;
+    return;
+  }
+  if (MK.phase === 'write') {
+    v.innerHTML = `<h1>모의고사 · ${esc(label)}</h1><div class="writebar"><div class="row"><span class="timer" id="mkTimer" role="timer">100:00</span><span class="note">종이 답안지에 쓰고, 끝나면 '채점하기'를 누릅니다.</span></div></div>
+      <div class="panel"><ol class="outline">${MK.pick.map(k => `<li>${esc(exByKey(k).q)}</li>`).join('')}</ol></div>
+      <div class="row"><button class="primary" type="button" id="mkDone">채점하기</button><button class="ghost" type="button" id="mkPrint">문제지·답안지 인쇄</button></div>`;
+    mkLeft = 100 * 60 - Math.floor((Date.now() - MK.started) / 1000); mockTick(); mkTimer = setInterval(mockTick, 1000);
+    return;
+  }
+  // 채점: 문항별 모범 뼈대·핵심어를 보며 쓴 것 체크
+  const items = MK.pick.map(k => { const e = exByKey(k), r = ansOfEx(e); const kws = r ? D.topics[r.ti].subnote.keywords.filter(w => r.a.answer.includes(w)) : []; return { k, e, r, kws }; });
+  v.innerHTML = `<h1>모의고사 채점 · ${esc(label)}</h1><p class="sub">문항마다 내가 쓴 핵심어를 누르세요. 답안이 없는 문항은 점수에서 빠집니다.</p>
+    ${items.map(({ k, e, r, kws }) => `<div class="panel"><p class="q">${esc(e.q)}</p>${r ? `<details><summary>모범 뼈대 보기</summary><ol class="outline">${skeletonOf(r.a).map(l => `<li>${esc(l)}</li>`).join('')}</ol></details>
+      <div class="chips">${kws.map(w => { const on = (MK.checks[k] || []).includes(w); return `<button type="button" class="chip ${on ? 'hit' : 'miss'}" data-mkkw="${esc(k)}" data-w="${esc(w)}" aria-pressed="${on}">${esc(w)}<span class="sr">${on ? ' 썼음' : ' 빠짐'}</span></button>`; }).join('')}</div>
+      <p class="note">${(MK.checks[k] || []).length} / ${kws.length}</p>` : '<p class="note">이 문항은 아직 앱에 모범답안이 없습니다.</p>'}</div>`).join('')}
+    <div class="row"><button class="primary" type="button" id="mkFinish">채점 마치고 복습에 반영</button></div>`;
+}
+function mockFinish() {
+  let sum = 0, n = 0;
+  MK.pick.forEach(k => {
+    const r = ansOfEx(exByKey(k)); if (!r) return;
+    const kws = D.topics[r.ti].subnote.keywords.filter(w => r.a.answer.includes(w)); const p = kws.length ? (MK.checks[k] || []).length / kws.length : 0;
+    sum += p; n++; rateCard(r.a.id, p < 0.5 ? 'again' : p < 0.75 ? 'hard' : 'good');   // 약한 문항은 복습에 더 일찍
+  });
+  const score = n ? Math.round(sum / n * 100) : 0;
+  S.mocks = [{ day: dayKey(), label: MK.kind === 'round' ? `${MK.h}회 ${MK.g}교시` : `섞은 ${MK.g}교시`, score, n }, ...(S.mocks || [])].slice(0, 50);
+  MK = null; save(); renderMock(); renderNav(); toast(`모의고사 ${score}점(핵심어 기준). 약한 문항은 복습에 올렸습니다`);
+}
+function mockPrint() {
+  const keys = MK.phase === 'select' && MK.pick.length !== NEED(MK.g) ? MK.qs : (MK.pick.length ? MK.pick : MK.qs);
+  const w = window.open('', '_blank'); if (!w) { toast('팝업이 막혀 인쇄 창을 열 수 없습니다'); return; }
+  const lines = Array.from({ length: 22 }, () => '<div class="ln"></div>').join('');
+  w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>모의고사 ${MK.g}교시</title><style>body{font-family:serif;margin:24px}h1{font-size:18px}ol{line-height:1.7}.pg{page-break-before:always;padding-top:12px}.ln{border-bottom:1px solid #999;height:34px}</style></head><body>
+    <h1>수자원개발기술사 모의고사 ${MK.g}교시(100분)</h1><p>${NEED(MK.g)}문제를 선택하여 쓰시오.</p><ol>${keys.map(k => `<li>${esc(exByKey(k).q)}</li>`).join('')}</ol>
+    ${Array.from({ length: MK.g === 1 ? 7 : 8 }, (_, i) => `<div class="pg"><p>답안지 ${i + 1}쪽</p>${lines}</div>`).join('')}</body></html>`);
+  w.document.close(); w.focus(); w.print();
+}
+
+// ── 처음 보는 문제 뼈대 잡기: 2분 안에 대제목·핵심어·그림 구상 ──
+let SK = null, skTimer = null, skLeft = 0;
+function skNew() {
+  const pool = EX.filter(e => e.a && !(S.skelDone || []).includes(e.a));
+  const pick = (pool.length ? pool : EX.filter(e => e.a))[Math.floor(Math.random() * (pool.length || EX.filter(e => e.a).length))];
+  SK = { k: `${pick.h}-${pick.g}-${pick.n}`, phase: 'think', text: '', checks: [] }; skLeft = 120; renderSkel();
+}
+function renderSkel() {
+  const v = $('v-skel'); clearInterval(skTimer); skTimer = null;
+  if (!SK) { v.innerHTML = `<h1>뼈대 잡기</h1><p class="sub">처음 보는 문제를 받으면 2분 안에 대제목 5~7개, 핵심어, 그림 1개를 정하는 연습입니다. 공부하지 않은 문항부터 나옵니다.</p><button class="primary" type="button" id="skGo">문제 받기</button>`; return; }
+  const e = exByKey(SK.k), r = ansOfEx(e);
+  if (SK.phase === 'think') {
+    v.innerHTML = `<h1>뼈대 잡기</h1><div class="writebar"><div class="row"><span class="badge">${e.h}회 ${e.g}교시</span><span class="timer" id="skTimer" role="timer">2:00</span></div><p class="q">${esc(e.q)}</p></div>
+      <textarea id="skText" aria-label="뼈대" placeholder="Ⅰ. 개요&#10;Ⅱ. …&#10;핵심어: …&#10;그림: …">${esc(SK.text)}</textarea><div class="row"><button class="primary" type="button" id="skShow">모범 뼈대와 비교</button></div>`;
+    const tick = () => { skLeft--; const el = $('skTimer'); if (el) { el.textContent = `${skLeft < 0 ? '+' : ''}${Math.floor(Math.abs(skLeft) / 60)}:${String(Math.abs(skLeft) % 60).padStart(2, '0')}`; el.classList.toggle('over', skLeft < 0); } };
+    skTimer = setInterval(tick, 1000); $('skText').addEventListener('input', ev => { SK.text = ev.target.value; });
+    return;
+  }
+  const kws = D.topics[r.ti].subnote.keywords.filter(w => r.a.answer.includes(w));
+  v.innerHTML = `<h1>뼈대 잡기 · 비교</h1><p class="q">${esc(e.q)}</p>
+    <div class="cmpgrid"><div class="panel"><h2>내 뼈대</h2><pre class="ans">${esc(SK.text || '(작성 안 함)')}</pre></div>
+    <div class="panel"><h2>모범 뼈대</h2><ol class="outline">${skeletonOf(r.a).map(l => `<li>${esc(l)}</li>`).join('')}</ol></div></div>
+    <h2>떠올린 핵심어를 누르세요</h2><div class="chips">${kws.map(w => { const on = SK.checks.includes(w); return `<button type="button" class="chip ${on ? 'hit' : 'miss'}" data-skkw="${esc(w)}" aria-pressed="${on}">${esc(w)}<span class="sr">${on ? ' 떠올림' : ' 못 떠올림'}</span></button>`; }).join('')}</div>
+    <p class="note">${SK.checks.length} / ${kws.length} · 주제: ${esc(D.topics[r.ti].subnote.topic)}</p>
+    <div class="row"><button class="primary" type="button" id="skNext">다음 문제</button><button class="ghost" type="button" id="skStudy">이 주제 공부하기</button></div>`;
+}
+
+// ── 주간 계획: 남은 주 수로 새 주제 → 회독 → 모의고사 ──
+function renderPlan() {
+  const d = daysToExam(), weeks = d === null ? null : Math.max(0, Math.ceil(d / 7));
+  const studied = studiedTopicIds(), n = D.topics.length, done = D.topics.filter(t => studied.has(t.tid)).length;
+  const allA = [...ANS_BY_ID.keys()], seenA = allA.filter(id => S.cards[id]).length;
+  const newWeeks = weeks === null ? null : Math.max(1, weeks - 6);   // 마지막 6주: 회독 2주 + 모의고사 4주
+  const perWeek = newWeeks ? Math.ceil((n - done) / newWeeks) : 0;
+  const wk = d => { const t = today(); t.setDate(t.getDate() - ((t.getDay() + 6) % 7)); return t; };
+  const mon = wk(), thisWeek = Object.keys(S.days).filter(k => new Date(k.slice(0, 10) + 'T00:00:00') >= mon && (S.days[k].done || []).length).length;
+  const bar = (a, b) => `<div class="meter big" aria-hidden="true"><i style="width:${b ? Math.round(a / b * 100) : 0}%"></i></div>`;
+  $('v-plan').innerHTML = `<h1>주간 계획</h1><p class="sub">${D.examConfirmed ? '시험까지' : '시험일 미확정(공고 전, 임시 날짜 기준)'} ${weeks === null ? '' : `${weeks}주 남음`}. 새 주제 → 회독 2주 → 모의고사 4주 순서로 짭니다.</p>
+    <div class="panel"><h2>진도</h2>
+      <p>공부한 주제 ${done} / ${n}</p>${bar(done, n)}
+      <p>한 번 이상 공부한 문항 ${seenA} / ${allA.length}</p>${bar(seenA, allA.length)}
+      <p>이번 주 공부한 날·주제 ${thisWeek}회</p></div>
+    <div class="panel"><h2>단계별 일정</h2><table><tr><th>단계</th><th>기간</th><th>할 일</th></tr>
+      <tr><td>1 새 주제</td><td>${newWeeks ?? '-'}주</td><td>남은 ${n - done}개 주제를 주당 ${perWeek}개씩 처음 공부(오늘의 추천이 출제 비중대로 고름)</td></tr>
+      <tr><td>2 회독</td><td>2주</td><td>요약 카드 전체 1회 + 복습 모아 보기 매일</td></tr>
+      <tr><td>3 모의고사</td><td>4주</td><td>주 2회 교시 1개씩 종이에 100분, 채점 결과는 복습에 반영</td></tr></table></div>
+    <div class="panel"><h2>이번 주 목표</h2><ol class="outline"><li>새 주제 ${perWeek}개 처음 공부</li><li>복습 모아 보기 매일 비우기</li><li>${weeks !== null && weeks <= 6 ? '모의고사 2회(교시 1개씩)' : '뼈대 잡기 하루 3문제'}</li></ol></div>`;
+}
+
 // ── 문항 목록 ──
 function renderList() {
   const cur = pickQuestion();
@@ -435,11 +556,13 @@ function renderList() {
 }
 
 // ── 화면 전환 ──
-const RENDER = { today: renderToday, read: renderRead, recall: renderRecall, write: renderWrite, compare: renderCompare, review: renderReview, list: renderList, due: renderDue, cover: renderCover, cards: renderCards };
+const RENDER = { today: renderToday, read: renderRead, recall: renderRecall, write: renderWrite, compare: renderCompare, review: renderReview, list: renderList, due: renderDue, cover: renderCover, cards: renderCards, mock: renderMock, skel: renderSkel, plan: renderPlan };
 function show(step) {
   if (step !== 'write' && timer) { clearInterval(timer); timer = null; }
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === `v-${step}`));
   if (step === 'due') DUEQ = null;
+  if (step !== 'mock' && mkTimer) { clearInterval(mkTimer); mkTimer = null; }
+  if (step !== 'skel' && skTimer) { clearInterval(skTimer); skTimer = null; }
   RENDER[step](); renderNav(step); window.scrollTo(0, 0);
 }
 function renderNav(active) {
@@ -461,6 +584,18 @@ document.addEventListener('click', e => {
   if (el.dataset.drate) return dueRate(el.dataset.drate);
   if (el.id === 'dueShow') { DPH = 'a'; return renderDue(); }
   if (el.id === 'oneMore') return oneMore();
+  if (el.id === 'mkRoundGo') return mockStart('round', +$('mkG1').value, +$('mkRound').value);
+  if (el.id === 'mkMixGo') return mockStart('mix', +$('mkG2').value);
+  if (el.id === 'mkBegin') { MK.phase = 'write'; MK.started = Date.now(); save(); return renderMock(); }
+  if (el.id === 'mkDone') { MK.phase = 'score'; save(); return renderMock(); }
+  if (el.id === 'mkFinish') return mockFinish();
+  if (el.id === 'mkQuit') { MK = null; save(); return renderMock(); }
+  if (el.id === 'mkPrint') return mockPrint();
+  if (el.dataset.mkkw !== undefined) { const k = el.dataset.mkkw, w = el.dataset.w, a = MK.checks[k] = MK.checks[k] || []; const i = a.indexOf(w); if (i < 0) a.push(w); else a.splice(i, 1); save(); return renderMock(); }
+  if (el.id === 'skGo' || el.id === 'skNext') { if (SK && SK.phase === 'cmp') { const r = ansOfEx(exByKey(SK.k)); S.skelDone = [...(S.skelDone || []), r.a.id].slice(-500); save(); } return skNew(); }
+  if (el.id === 'skShow') { SK.phase = 'cmp'; return renderSkel(); }
+  if (el.dataset.skkw !== undefined) { const w = el.dataset.skkw, i = SK.checks.indexOf(w); if (i < 0) SK.checks.push(w); else SK.checks.splice(i, 1); return renderSkel(); }
+  if (el.id === 'skStudy') { const r = ansOfEx(exByKey(SK.k)); S.topicMode = 'manual'; setTopic(r.ti); S.topic = TI; todayState().q = r.a.id; save(); $('topicSel').value = String(TI); return show('today'); }
   if (el.dataset.ctier !== undefined) { S.cardTier = el.dataset.ctier; CI = 0; save(); return renderCards(); }
   if (el.id === 'cardHide') { CHIDE = !CHIDE; return renderCards(); }
   if (el.id === 'cardPrev' || el.id === 'cardNext') { CI += el.id === 'cardNext' ? 1 : -1; renderCards(); window.scrollTo(0, 0); return; }
@@ -531,6 +666,11 @@ function mergeState(cur, inc) {
   });
   return out;
 }
+document.addEventListener('change', e => {
+  const k = e.target.dataset && e.target.dataset.mkpick; if (!k || !MK) return;
+  if (e.target.checked) { if (MK.pick.length >= NEED(MK.g)) { e.target.checked = false; toast(`${NEED(MK.g)}개까지 고릅니다`); return; } MK.pick.push(k); } else MK.pick = MK.pick.filter(x => x !== k);
+  save(); $('mkCnt').textContent = `${MK.pick.length} / ${NEED(MK.g)} 선택`; $('mkBegin').disabled = MK.pick.length !== NEED(MK.g);
+});
 $('importFile').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return; e.target.value = '';
   let p; try { p = JSON.parse(await f.text()); } catch { toast('학습 기록 파일이 아닙니다'); return; }
