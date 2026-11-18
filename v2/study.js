@@ -114,7 +114,12 @@ function renderToday() {
     }).join('')}</div>` : ''}`;
 }
 function nextStep() { const t = todayState(); return STEPS.find(s => !t.done.includes(s)) || 'review'; }
-function badge(a) { return a.status === '원문 확인' ? '<span class="badge ok">원문 확인</span>' : `<span class="badge draft">${esc(a.status)}</span>`; }
+function aliasNote(a) {
+  if (!a.aliasOf) return '';
+  const r = ANS_BY_ID.get(a.id.split(':')[0] + ':' + a.aliasOf), s = r && r.a.source;
+  return ` <span class="badge">${s ? `${s.h}회 ${s.g}교시 ${s.n}번` : '다른 기출'}과 같은 답안</span>`;
+}
+function badge(a) { return (a.status === '원문 확인' ? '<span class="badge ok">원문 확인</span>' : `<span class="badge draft">${esc(a.status)}</span>`) + aliasNote(a); }
 
 // ── 모범답안 표시: 【모식도】는 칸 폭을 맞춘 고정 격자(한글 2칸·나머지 1칸, 줄바꿈 없음), | 표는 진짜 표로 ──
 const WIDE = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿가-힣豈-﫿︰-﹏＀-｠￠-￦]/;
