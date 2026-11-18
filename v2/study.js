@@ -116,6 +116,38 @@ function renderToday() {
 function nextStep() { const t = todayState(); return STEPS.find(s => !t.done.includes(s)) || 'review'; }
 function badge(a) { return a.status === '원문 확인' ? '<span class="badge ok">원문 확인</span>' : `<span class="badge draft">${esc(a.status)}</span>`; }
 
+// ── 모범답안 표시: 【모식도】는 칸 폭을 맞춘 고정 격자(한글 2칸·나머지 1칸, 줄바꿈 없음), | 표는 진짜 표로 ──
+const WIDE = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿가-힣豈-﫿︰-﹏＀-｠￠-￦]/;
+function diagLine(l) {
+  // 글자마다 고정 칸(한글 2칸·나머지 1칸)에 넣어 글꼴이 달라도 선이 어긋나지 않게
+  const out = [...l].map(ch => ch === ' ' ? '<i class="dn"> </i>' : `<i class="${WIDE.test(ch) ? 'dw' : 'dn'}">${esc(ch)}</i>`).join('');
+  return `<div class="dl">${out || '&nbsp;'}</div>`;
+}
+function ansHtml(text) {
+  const L = String(text || '').split('\n'), out = []; let i = 0, para = [];
+  const endPara = () => { if (para.length) out.push(`<div class="atext">${esc(para.join('\n'))}</div>`); para = []; };
+  const isRow = l => /^\s*\|.*\|\s*$/.test(l);
+  while (i < L.length) {
+    const l = L[i];
+    if (/^\s*【모식도/.test(l)) {
+      endPara(); const d = [];
+      const head = l.replace(/^\s*【모식도】?/, '').trim(); if (head) d.push(head); i++;
+      while (i < L.length && L[i].trim() && !isRow(L[i]) && !/^\s*[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]\.\s/.test(L[i]) && !/^###/.test(L[i])) d.push(L[i++]);
+      const ind = Math.min(...d.map(x => x.match(/^ */)[0].length).concat([99]));
+      out.push(`<figure class="adiag"><figcaption>모식도</figcaption><div class="dgrid">${d.map(x => diagLine(x.slice(ind === 99 ? 0 : ind))).join('')}</div></figure>`);
+      continue;
+    }
+    if (isRow(l)) {
+      endPara(); const rows = [];
+      while (i < L.length && isRow(L[i])) { const c = L[i++].trim().replace(/^\||\|$/g, '').split('|').map(x => x.trim()); if (!c.every(x => /^:?-{2,}:?$/.test(x))) rows.push(c); }
+      out.push(`<div class="atbl"><table>${rows.map((r, k) => `<tr>${r.map(c => k ? `<td>${esc(c)}</td>` : `<th>${esc(c)}</th>`).join('')}</tr>`).join('')}</table></div>`);
+      continue;
+    }
+    para.push(l); i++;
+  }
+  endPara();
+  return out.join('');
+}
 // ── 서브노트 그림: SVG 그림 + 흐름 상자(글자 그림은 글꼴에 따라 깨져서 쓰지 않음) ──
 function diagHtml(sn) {
   const d = sn.diag;
@@ -289,7 +321,7 @@ function renderCompare() {
       ${r.presentationMissing.length ? `<p>형식 보완: ${esc(r.presentationMissing.join(' · '))}</p>` : ''}
       ${r.notices.length ? `<p>명칭 확인: ${esc(r.notices.join(' · '))}</p>` : ''}</div>
     <h2>핵심어 (실선 = 썼음, 점선 = 빠짐)</h2><div class="chips">${ks.map(k => `<span class="chip ${termHit(k, an) ? 'hit' : 'miss'}"><span class="sr">${termHit(k, an) ? '썼음: ' : '빠짐: '}</span>${esc(k)}</span>`).join('')}</div>
-    <h2>나란히 보기</h2><div class="two"><div class="panel"><b>내 답안</b><pre>${esc(last.text)}</pre></div><div class="panel"><b>모범답안</b> ${badge(a)}<pre>${esc(a.answer)}</pre><p class="note">근거: ${esc(a.basis)}</p></div></div>
+    <h2>나란히 보기</h2><div class="two"><div class="panel"><b>내 답안</b><pre>${esc(last.text)}</pre></div><div class="panel"><b>모범답안</b> ${badge(a)}<div class="ansbody">${ansHtml(a.answer)}</div><p class="note">근거: ${esc(a.basis)}</p></div></div>
     ${figsOfAnswer(a.id).map(figHtml).join('')}${memoHtml(a)}<button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
 }
 
@@ -298,7 +330,7 @@ function renderComparePen(a, last) {
   $('v-compare').innerHTML = `<h1>4단계 · 모범답안과 비교</h1><p class="sub">손글씨 답안은 자동 채점하지 않습니다. 모범답안의 핵심어 중 내가 쓴 것을 눌러 체크하세요.</p>
     <div class="result"><div class="row"><span class="score" id="penScore">${ck.length} / ${ks.length}</span><span>핵심어 체크 · ${Math.round(last.secs / 60)}분 사용</span></div></div>
     <h2>핵심어 (내가 쓴 것을 누르면 실선으로 바뀜)</h2><div class="chips">${ks.map(k => `<button type="button" class="chip tap ${ck.includes(k) ? 'hit' : 'miss'}" aria-pressed="${ck.includes(k)}" data-kw="${esc(k)}">${esc(k)}</button>`).join('')}</div>
-    <h2>나란히 보기</h2><div class="two"><div class="panel"><b>내 답안</b><div class="penimgs" id="penImgs"><p class="note">불러오는 중…</p></div></div><div class="panel"><b>모범답안</b> ${badge(a)}<pre>${esc(a.answer)}</pre><p class="note">근거: ${esc(a.basis)}</p></div></div>
+    <h2>나란히 보기</h2><div class="two"><div class="panel"><b>내 답안</b><div class="penimgs" id="penImgs"><p class="note">불러오는 중…</p></div></div><div class="panel"><b>모범답안</b> ${badge(a)}<div class="ansbody">${ansHtml(a.answer)}</div><p class="note">근거: ${esc(a.basis)}</p></div></div>
     ${figsOfAnswer(a.id).map(figHtml).join('')}${memoHtml(a)}<button class="primary" data-done="compare" data-go="review">비교 끝 → 5단계 복습 예약</button>`;
   IDB.get('att|' + a.id + '|' + last.day).then(imgs => { const el = $('penImgs'); if (el) el.innerHTML = imgs && imgs.length ? imgs.map(u => `<img alt="손글씨 답안" src="${u}">`).join('') : '<p class="note">이미지를 찾지 못했습니다.</p>'; });
 }
@@ -396,7 +428,7 @@ function renderDue() {
     ${DPH === 'q' ? `<p class="note">대제목(Ⅰ·Ⅱ·Ⅲ…)과 꼭 쓸 핵심어, 그림 1개를 머릿속이나 종이에 적어 본 뒤 누르세요.</p><button class="primary" type="button" id="dueShow">모범 뼈대 보기</button>`
     : `<h2>모범 뼈대</h2><ol class="outline">${skeletonOf(a).map(l => `<li>${esc(l)}</li>`).join('')}</ol>
       ${kws.length ? `<h2>핵심어</h2><div class="chips">${kws.map(k => `<span class="chip">${esc(k)}</span>`).join('')}</div>` : ''}
-      <details><summary>모범답안 전체</summary><pre class="ans">${esc(a.answer)}</pre></details>
+      <details><summary>모범답안 전체</summary><div class="ansbody boxed">${ansHtml(a.answer)}</div></details>
       <div class="rate">${RATES.map(([k, t, s2]) => `<button type="button" data-drate="${k}"><b>${t}</b><span>${s2}</span></button>`).join('')}</div>`}</div>`;
 }
 function dueRate(v) {

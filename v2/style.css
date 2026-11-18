@@ -254,3 +254,19 @@ pre.ans{white-space:pre-wrap;font:inherit;font-size:.9rem;line-height:1.6;backgr
 .flowrow.par{gap:6px}
 .flowrow.par .flowbox{border-style:dashed}
 .flowrow.par::before{content:'나란히';font-size:.72rem;color:var(--ink2);margin-right:2px}
+
+/* 모범답안: 본문·모식도 격자·표 */
+.ansbody{font-size:.92rem;line-height:1.75;margin:6px 0 0}
+.ansbody.boxed{background:var(--desk);padding:12px;border-radius:4px;max-height:60vh;overflow:auto;font-size:.9rem;line-height:1.6}
+.ansbody .atext{white-space:pre-wrap;overflow-wrap:anywhere}
+.adiag{margin:8px 0;padding:8px 10px;border:1px solid var(--rule);border-radius:4px;background:var(--paper);overflow-x:auto}
+.adiag figcaption{font-size:.8rem;color:var(--ink2);margin-bottom:4px}
+.dgrid{font-size:.82rem;line-height:1.35;white-space:pre;width:max-content}
+.dl{display:block;height:1.35em}
+.dl i{display:inline-block;font-style:normal;text-align:center;vertical-align:top;white-space:pre;overflow:visible}
+.dl .dn{width:.55em;font-family:ui-monospace,Menlo,Consolas,"Courier New",monospace}
+.dl .dw{width:1.1em;font-family:var(--sans)}
+.atbl{overflow-x:auto;margin:8px 0}
+.atbl table{border-collapse:collapse;font-size:.86rem;line-height:1.5;min-width:60%}
+.atbl th,.atbl td{border:1px solid var(--rule);padding:4px 8px;text-align:left;vertical-align:top}
+.atbl th{background:var(--desk);font-weight:700}
