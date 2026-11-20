@@ -1,5 +1,5 @@
 // 오프라인용 서비스워커: 먼저 네트워크(최신 자료), 끊기면 저장본
-const CACHE = 'pe-study-v2-202611210820';
+const CACHE = 'pe-study-v2-202611210821';
 const ASSETS = ['./', './index.html', './style.css', './study.js', './scoring.js', './data.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-180.png'];
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS).catch(() => {}))); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
